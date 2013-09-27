@@ -13,6 +13,7 @@ import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulerSettings;
+import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
 
 /**
@@ -30,17 +31,19 @@ public class SiteManager extends WorkflowExecutor
 	
 	protected SiteManager() throws RemoteException
 	{
-		//TODO: get managerURI if esixt
-		String managerURI = "";
-		while(manager == null)
+		if(Utils.hasProp("manager_host") && Utils.hasProp("manager_port"))
 		{
-			try
+			String managerURI = "//" + Utils.getProp("manager_host") + ":" + Utils.getProp("manager_port");
+			while (manager == null)
 			{
-				manager = (SiteManager)WorkflowExecutor.getRemoteExecutor(managerURI);
-			}
-			catch (NotBoundException ex)
-			{
-				manager = null;
+				try
+				{
+					manager = (SiteManager) WorkflowExecutor.getRemoteExecutor(managerURI);
+				}
+				catch (NotBoundException ex)
+				{
+					manager = null;
+				}
 			}
 		}
 	}

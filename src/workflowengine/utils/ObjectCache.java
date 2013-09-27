@@ -6,6 +6,8 @@ package workflowengine.utils;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -15,21 +17,19 @@ import java.util.logging.Logger;
  */
 public class ObjectCache
 {
-	private static HashMap<Class, HashMap<Object, Object >> cache = new HashMap<>();
-	public static void cache(Class c, Object key, Object obj)
+	private static int maxCacheSize = 100;
+	private static HashMap<Object, Object> cache = new HashMap<>();
+	private static LinkedList keyQ = new LinkedList();
+	public static void cache(Object key, Object obj)
 	{
-		HashMap<Object, Object > classMap = cache.get(c);
-		if(classMap == null)
-		{
-			classMap = new HashMap<>();
-			cache.put(c, classMap);
-		}
-		classMap.put(key, obj);
+		cache.put(key, obj);
+		keyQ.add(key);
+		flush();
 	}
 	
 	public static Object get(Class c, Object key)
 	{
-		Object obj = cache.get(c).get(key);
+		Object obj = cache.get(key);
 		if(obj == null)
 		{
 			try
@@ -40,8 +40,16 @@ public class ObjectCache
 			{
 				Logger.getLogger(ObjectCache.class.getName()).log(Level.SEVERE, null, ex);
 			}
-			cache(c, key, obj);
+			cache(key, obj);
 		}
 		return obj;
+	}
+	
+	private static void flush()
+	{
+		while(keyQ.size()>maxCacheSize/2)
+		{
+			cache.remove(keyQ.poll());
+		}
 	}
 }

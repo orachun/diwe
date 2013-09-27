@@ -14,6 +14,7 @@ import workflowengine.resource.Processor;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulerSettings;
+import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
 
 /**
@@ -29,7 +30,7 @@ public class Worker extends WorkflowExecutor
 	private ExecutorNetwork execNetwork;
 	private Processor[] processors;
 	private String workingDir;
-
+	private int workingProcessors = 0;
 
 	
 	
@@ -44,8 +45,7 @@ public class Worker extends WorkflowExecutor
 			processors[i] = new Processor(this);
 		}
 		
-		//TODO: get managerURI
-		String managerURI = "";
+		String managerURI = "//"+Utils.getProp("manager_host")+":"+Utils.getProp("manager_port");
 		while(manager == null)
 		{
 			try
@@ -101,11 +101,21 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public void dispatchTask()
 	{
-		//TODO: dispatch task to all processors
-		ScheduleEntry se = taskQueue.poll();
-		if(se!=null)
+		while(workingProcessors < totalProcessors && !taskQueue.isEmpty())
 		{
-			TaskStatus ts = processors[se.target.charAt(0)].exec(se.task);
+			final ScheduleEntry se = taskQueue.poll();
+			if(se!=null)
+			{
+				new Thread(new Runnable() {
+
+					@Override
+					public void run()
+					{
+						processors[se.target.charAt(0)].exec(se.task);
+					}
+				}).start();
+				workingProcessors++;
+			}
 		}
 	}
 
@@ -114,8 +124,11 @@ public class Worker extends WorkflowExecutor
 	{
 		//TODO: store task status to local db
 		manager.setTaskStatus(status);
-		
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
+		if(status.status == TaskStatus.STATUS_COMPLETED)
+		{
+			workingProcessors--;
+			dispatchTask();
+		}
 	}
 	
 	
