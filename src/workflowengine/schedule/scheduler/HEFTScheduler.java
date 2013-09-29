@@ -2,8 +2,10 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -11,6 +13,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedList;
 import removed.Worker;
+import workflowengine.schedule.Schedule;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
 
@@ -21,7 +24,7 @@ import workflowengine.workflow.WorkflowFile;
 public class HEFTScheduler implements Scheduler
 {
 
-    SchedulerSettings settings;
+    SchedulingSettings settings;
     int totalTasks;
     int totalWorkers;
     double[] avgExecTime;
@@ -29,7 +32,7 @@ public class HEFTScheduler implements Scheduler
     double[] rank;
 
     @Override
-    public Schedule getSchedule(SchedulerSettings settings)
+    public Schedule getSchedule(SchedulingSettings settings)
     {
         this.settings = settings;
         totalTasks = settings.getTotalTasks();
@@ -82,7 +85,7 @@ public class HEFTScheduler implements Scheduler
                 for(Task p : settings.getParentTasks(t))
                 {
                     Worker parentWorker = s.getWorkerForTask(p);
-                    double commTime = parentWorker.equals(w) ? 0 : settings.getTransferTime(p.getOutputFilesForTask(t));
+                    double commTime = parentWorker.equals(w) ? 0 : settings.getTransferTime(p.getOutputFileUUIDsForTask(t));
                     parentFinTime = Math.max(parentFinTime, taskFinishTime.get(p)+commTime);
                 }
                 double finTime = Math.max(parentFinTime, workerReadyTime.get(w))+w.getExecTime(t);
@@ -120,7 +123,7 @@ public class HEFTScheduler implements Scheduler
             Collection<Task> children = settings.getChildTasks(parent);
             for (Task child : children)
             {
-                WorkflowFile[] files = parent.getOutputFilesForTask(child);
+                WorkflowFile[] files = parent.getOutputFileUUIDsForTask(child);
                 double sum = 0;
                 for (int k = 0; k < totalWorkers; k++)
                 {

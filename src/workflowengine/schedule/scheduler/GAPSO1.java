@@ -2,10 +2,13 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 import java.util.List;
 import removed.ExecSite;
+import workflowengine.schedule.Schedule;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
@@ -27,7 +30,7 @@ public class GAPSO1 implements Scheduler
     }
     
     @Override
-    public Schedule getSchedule(SchedulerSettings settings)
+    public Schedule getSchedule(SchedulingSettings settings)
     {
         ITERATION = Utils.getIntProp(PROP_ITERATIONS);
         ga.init(settings);
@@ -98,7 +101,7 @@ public class GAPSO1 implements Scheduler
         Utils.setPropIfNotExist(PSO.PROP_INERTIA_WEIGHT, "0.1");
         
         Scheduler schr = new GA();
-        SchedulerSettings ss = new SchedulerSettings(wf, es, new CostOptimizationFC(wf.getCumulatedExecTime()*0.1,10,1));
+        SchedulingSettings ss = new SchedulingSettings(wf, es, new CostOptimizationFC(wf.getCumulatedExecTime()*0.1,10,1));
         
         double total = 0;
         for(int i=0;i<10;i++)

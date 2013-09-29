@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import workflowengine.communication.Communicator;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.message.Message;
-import workflowengine.utils.DBRecord;
+import workflowengine.utils.db.DBRecord;
 import workflowengine.utils.SynchronizedHashMap;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;

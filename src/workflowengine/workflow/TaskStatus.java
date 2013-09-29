@@ -25,6 +25,8 @@ public class TaskStatus implements Serializable
 	public long start = -1;
 	public long finish = -1;
 
+	
+	
 	public TaskStatus(Task t, char status, int retVal, String errMsg)
 	{
 		this(t.getUUID(), status, retVal, errMsg);
@@ -49,13 +51,13 @@ public class TaskStatus implements Serializable
 	
 	
 	
-	public static TaskStatus waitingStatus(Task t)
+	public static TaskStatus waitingStatus(String tUUID)
 	{
-		return new TaskStatus(t.getUUID(), STATUS_WAITING, -1, "");
+		return new TaskStatus(tUUID, STATUS_WAITING, -1, "");
 	}
-	public static TaskStatus executingStatus(Task t)
+	public static TaskStatus executingStatus(String tUUID)
 	{
-		return new TaskStatus(t.getUUID(), STATUS_EXECUTING, -1, "", Utils.time(), -1);
+		return new TaskStatus(tUUID, STATUS_EXECUTING, -1, "", Utils.time(), -1);
 	}
 	public static TaskStatus completedStatus(TaskStatus ts)
 	{

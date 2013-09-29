@@ -2,11 +2,15 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 import java.util.ArrayList;
 import java.util.Collections;
 import removed.ExecSite;
+import workflowengine.schedule.Schedule;
+import workflowengine.schedule.ScheduleComparator;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
@@ -22,13 +26,13 @@ public class GAPSO extends GA
     
     private double kt;
     private double kr;
-    public void init(SchedulerSettings settings)
+    public void init(SchedulingSettings settings)
     {
         super.init(settings);
         kt = Utils.getDoubleProp(PROP_KT);
         kr = Utils.getDoubleProp(PROP_KR);
     }
-    public Schedule getSchedule(SchedulerSettings settings)
+    public Schedule getSchedule(SchedulingSettings settings)
     {
         init(settings);
         population = new ArrayList<>();
@@ -109,7 +113,7 @@ public class GAPSO extends GA
         
         Scheduler GASch = new GAPSO();
         Scheduler HEFTSch = new HEFTScheduler();
-        SchedulerSettings ss = new SchedulerSettings(wf, es, new CostOptimizationFC());
+        SchedulingSettings ss = new SchedulingSettings(wf, es, new CostOptimizationFC());
         Schedule HEFTs = HEFTSch.getSchedule(ss);
         System.out.println(HEFTs.getFitness());
         System.out.println(HEFTs.getMakespan());

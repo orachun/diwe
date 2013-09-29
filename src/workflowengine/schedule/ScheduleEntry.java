@@ -4,20 +4,18 @@
  */
 package workflowengine.schedule;
 
-import workflowengine.workflow.Task;
-
 /**
  *
  * @author orachun
  */
 public class ScheduleEntry
 {
-	public final Task task;
+	public final String taskUUID;
 	public final String target;
 
-	public ScheduleEntry(Task task, String target)
+	public ScheduleEntry(String taskUUID, String target)
 	{
-		this.task = task;
+		this.taskUUID = taskUUID;
 		this.target = target;
 	}
 	

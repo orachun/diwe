@@ -2,12 +2,13 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
 import java.util.HashMap;
 import java.util.Random;
 import workflowengine.schedule.Schedule;
-import workflowengine.schedule.SchedulerSettings;
+import workflowengine.schedule.Schedule;
+import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
 
 /**
@@ -29,7 +30,7 @@ public class PSOIndividual extends Schedule
     
     private Schedule oldSch;
 
-    public PSOIndividual(SchedulerSettings settings, HashMap<String, Object> globalVars)
+    public PSOIndividual(SchedulingSettings settings, HashMap<String, Object> globalVars)
     {
         super(settings);
         this.globalVars = globalVars;

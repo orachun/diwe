@@ -4,8 +4,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import removed.Worker;
+import java.util.Queue;
+import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -13,16 +15,16 @@ import workflowengine.workflow.Task;
  */
 public class Schedule
 {
-    protected final SchedulerSettings settings;
-    private HashMap<Task, String> mapping; //Mapping from task to worker URI
-    private HashMap<Task, Double> estimatedStart;
-    private HashMap<Task, Double> estimatedFinish;
+    protected final SchedulingSettings settings;
+    private HashMap<String, String> mapping; //Mapping from taskUUID to worker URI
+    private HashMap<String, Double> estimatedStart;
+    private HashMap<String, Double> estimatedFinish;
     private double makespan;
     private double cost;
     private boolean edited;
     private double fitness;
 
-    public Schedule(SchedulerSettings settings)
+    public Schedule(SchedulingSettings settings)
     {
         this.settings = settings;
         estimatedStart = new HashMap<>(settings.getTotalTasks()); 
@@ -33,12 +35,12 @@ public class Schedule
         edited = true;
     }
 
-    public SchedulerSettings getSettings()
+    public SchedulingSettings getSettings()
     {
         return settings;
     }
 
-	public Map<Task, String> getMapping()
+	public Map<String, String> getMapping()
 	{
 		return Collections.unmodifiableMap(mapping);
 	}
@@ -70,23 +72,23 @@ public class Schedule
     private void mapAllTaskToFirstWorker()
     {
 		String w = settings.getExecNetwork().getExecutorURISet().iterator().next();
-        for (Task t : settings.getTaskSet())
+        for (String taskUUID : settings.getTaskUUIDSet())
         {
-            setWorkerForTask(t, w);
+            setWorkerForTask(taskUUID, w);
         }
         this.edited = true;
     }
 
-    public String getWorkerForTask(Task t)
+    public String getWorkerForTask(String taskUUID)
     {
-        return mapping.get(t);
+        return mapping.get(taskUUID);
     }
 
-    public void setWorkerForTask(Task t, String worker)
+    public void setWorkerForTask(String taskUUID, String worker)
     {
-        if (!settings.isFixedTask(t))
+        if (!settings.isFixedTask(taskUUID))
         {
-            mapping.put(t, worker);
+            mapping.put(taskUUID, worker);
             edited = true;
         }
     }
@@ -132,65 +134,72 @@ public class Schedule
 
     private void calMakespan()
     {
-		//TODO: modify this to support multiple processors per worker
-		HashMap<String, Double> workerReadyTime = new HashMap<>(
-				settings.getExecNetwork().getExecutorURISet().size());
-        LinkedList<Task> finishedTasks = new LinkedList<>();
+//		HashMap<String, Double> workerReadyTime = new HashMap<>(
+//				settings.getExecNetwork().getExecutorURISet().size());
+        LinkedList<String> finishedTasks = new LinkedList<>();
         estimatedStart.clear();
         estimatedFinish.clear();
 
-        for (Task t : settings.getFixedTasks())
+        for (String taskUUID : settings.getFixedTasks())
         {
-            estimatedStart.put(t, 0.0);
-            estimatedFinish.put(t, 0.0);
+            estimatedStart.put(taskUUID, 0.0);
+            estimatedFinish.put(taskUUID, 0.0);
         }
 
         finishedTasks.addAll(settings.getFixedTasks());
-		for(String worker : settings.getExecNetwork().getExecutorURISet())
-		{
-			workerReadyTime.put(worker, 0.0);
-		}
+//		for(String worker : settings.getExecNetwork().getExecutorURISet())
+//		{
+//			workerReadyTime.put(worker, 0.0);
+//		}
 		
         makespan = 0;
-        LinkedList<Task> pendingTasks = settings.getWorkflow().getTaskQueue();
+        Queue<String> pendingTasks = settings.getWorkflow().getTaskQueue();
         while (!pendingTasks.isEmpty())
         {
-            Task t = pendingTasks.poll();
-            if (finishedTasks.contains(t))
+            String taskUUID = pendingTasks.poll();
+            if (finishedTasks.contains(taskUUID))
             {
                 continue;
             }
-            if (!finishedTasks.containsAll(settings.getWorkflow().getParent(t)))
+            if (!finishedTasks.containsAll(settings.getWorkflow().getParent(taskUUID)))
             {
-                pendingTasks.push(t);
+                pendingTasks.add(taskUUID);
                 continue;
             }
 
-            String worker = this.getWorkerForTask(t);
-            double serverReadyTime = workerReadyTime.get(worker);
+            String worker = this.getWorkerForTask(taskUUID);
+			Site site = settings.getSite(worker);
+//            double serverReadyTime = workerReadyTime.get(worker);
+			double serverReadyTime = site.getAvailableTime(makespan);
             double parentFinishTime = 0;
-            for (Task p : settings.getWorkflow().getParent(t))
+            for (String parentTaskUUID : settings.getWorkflow().getParent(taskUUID))
             {
-                parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(p));
+                parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(parentTaskUUID));
             }
             double taskStartTime = Math.max(parentFinishTime, serverReadyTime);
-            double taskFinishTime = taskStartTime + t.getEstimatedExecTime();
+            double taskFinishTime = taskStartTime + Task.get(taskUUID).getEstimatedExecTime();
             
-            for (Task c : settings.getWorkflow().getChild(t))
+            for (String childTaskUUID : settings.getWorkflow().getChild(taskUUID))
             {
-                String workerForC = this.getWorkerForTask(c);
+                String workerForC = this.getWorkerForTask(childTaskUUID);
                 if(!worker.equals(workerForC))
                 {
-					taskFinishTime += settings.getExecNetwork()
-							.getTransferTime(worker, workerForC, t.getOutputFilesForTask(c));
+					for(String wff : Task.get(taskUUID).getOutputFileUUIDsForTask(childTaskUUID))
+					{
+						WorkflowFile f = (WorkflowFile)Cacher.get(WorkflowFile.class, wff);
+						taskFinishTime += settings.getExecNetwork()
+								.getTransferTime(worker, workerForC, f.getSize());
+					}
                 }
             }
             
-            estimatedStart.put(t, taskStartTime);
-            estimatedFinish.put(t, taskFinishTime);
-			workerReadyTime.put(worker, taskFinishTime);
+			site.scheduleJob(taskStartTime, taskFinishTime);
+			
+            estimatedStart.put(taskUUID, taskStartTime);
+            estimatedFinish.put(taskUUID, taskFinishTime);
+//			workerReadyTime.put(worker, taskFinishTime);
             makespan = Math.max(makespan, taskFinishTime);
-            finishedTasks.add(t);
+            finishedTasks.add(taskUUID);
         }
     }
 
@@ -247,21 +256,21 @@ public class Schedule
     public void print()
     {
         System.out.println(getMakespan() + " " + getCost());
-        for (Task t : mapping.keySet())
+        for (String taskUUID : mapping.keySet())
         {
 //            System.out.println(t+"->"+mapping.get(t)+ " start: "+ t.getDoubleProp("startTime")+ " end: "+t.getDoubleProp("finishTime"));
-            System.out.println(t + "->" + mapping.get(t) 
-                    + " start: " + estimatedStart.get(t) 
-                    + " end: " + estimatedFinish.get(t));
+            System.out.println(taskUUID + "->" + mapping.get(taskUUID) 
+                    + " start: " + estimatedStart.get(taskUUID) 
+                    + " end: " + estimatedFinish.get(taskUUID));
         }
     }
     
-    public double getEstimatedStart(Task t)
+    public double getEstimatedStart(String t)
     {
         return estimatedStart.get(t);
     }
     
-    public double getEstimatedFinish(Task t)
+    public double getEstimatedFinish(String t)
     {
         return estimatedFinish.get(t);
     }
@@ -270,10 +279,27 @@ public class Schedule
     public String toString()
     {
         StringBuilder sb = new StringBuilder();
-        for(Task t : settings.getTaskSet())
+        for(String taskUUID : settings.getTaskUUIDSet())
         {
-            sb.append(t.getUUID()).append(":").append(this.getWorkerForTask(t)).append(", ");
+            sb.append(taskUUID).append(":").append(this.getWorkerForTask(taskUUID)).append(", ");
         }
         return sb.toString();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

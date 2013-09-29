@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.utils;
+package workflowengine.utils.db;
 
 import java.sql.SQLException;
 

@@ -10,11 +10,13 @@ import java.rmi.RemoteException;
 import java.util.Set;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
-import workflowengine.resource.Processor;
+import workflowengine.resource.ExecutingProcessor;
+import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
-import workflowengine.schedule.SchedulerSettings;
+import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
+import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 
 /**
@@ -28,21 +30,19 @@ public class Worker extends WorkflowExecutor
 	protected static Worker instant;
 	private TaskQueue taskQueue = new TaskQueue();
 	private ExecutorNetwork execNetwork;
-	private Processor[] processors;
+	private ExecutingProcessor[] processors;
 	private String workingDir;
 	private int workingProcessors = 0;
-
-	
 	
 	protected Worker()  throws RemoteException
 	{
 		totalProcessors = Runtime.getRuntime().availableProcessors();
-		processors = new Processor[totalProcessors];
+		processors = new ExecutingProcessor[totalProcessors];
 		execNetwork = new ExecutorNetwork();
 		for(char i=0;i<totalProcessors;i++)
 		{
 			execNetwork.add(String.valueOf(i), Double.POSITIVE_INFINITY);
-			processors[i] = new Processor(this);
+			processors[i] = new ExecutingProcessor(this);
 		}
 		
 		String managerURI = "//"+Utils.getProp("manager_host")+":"+Utils.getProp("manager_port");
@@ -78,10 +78,12 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public void submit(Workflow wf)  
 	{
+		wf.setSubmitted(Utils.time());
+		wf.save();
 		//TODO: wait until all input files exist
 		
 		Schedule s = this.getScheduler().getSchedule(
-				new SchedulerSettings(wf, execNetwork, this.getDefaultFC()));
+				new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
 		taskQueue.submit(s.getMapping());
 		dispatchTask();
 	}
@@ -95,7 +97,7 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public Set<String> getExecutorURIs()
 	{
-		return null;
+		return execNetwork.getExecutorURISet();
 	}
 	
 	@Override
@@ -111,7 +113,7 @@ public class Worker extends WorkflowExecutor
 					@Override
 					public void run()
 					{
-						processors[se.target.charAt(0)].exec(se.task);
+						processors[se.target.charAt(0)].exec(Task.get(se.taskUUID));
 					}
 				}).start();
 				workingProcessors++;
@@ -131,7 +133,11 @@ public class Worker extends WorkflowExecutor
 		}
 	}
 	
-	
+	@Override
+	public RemoteWorker getWorker(String uri)
+	{
+		return new RemoteWorker(uri, processors[uri.charAt(0)]);
+	}
 	
 	
 	

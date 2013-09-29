@@ -9,10 +9,13 @@ import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
+import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
-import workflowengine.schedule.SchedulerSettings;
+import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
 
@@ -23,7 +26,7 @@ import workflowengine.workflow.Workflow;
 public class SiteManager extends WorkflowExecutor
 {
 	private SiteManager manager;
-	private HashMap<String, WorkflowExecutor> workerMap = new HashMap<>();
+	private HashMap<String, RemoteWorker> remoteWorkers = new HashMap<>();
 	protected static SiteManager instant;
 	private int totalProcessors = 0;
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
@@ -67,9 +70,11 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public void submit(Workflow wf) 
 	{
+		wf.setSubmitted(Utils.time());
+		wf.save();
 		//TODO: wait until all input files exist
 		
-		Schedule s = this.getScheduler().getSchedule(new SchedulerSettings(wf, execNetwork, this.getDefaultFC()));
+		Schedule s = this.getScheduler().getSchedule(new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
 		taskQueue.submit(s);
 		dispatchTask();
 	}
@@ -92,7 +97,7 @@ public class SiteManager extends WorkflowExecutor
 		Map<String, Set<Workflow>>  se = taskQueue.pollNextReadyTasks();
 		for(Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 		{
-			WorkflowExecutor we = workerMap.get(entry.getKey());
+			WorkflowExecutor we = remoteWorkers.get(entry.getKey()).getWorker();
 			for(Workflow wf : entry.getValue())
 			{
 				we.submit(wf);
@@ -114,25 +119,31 @@ public class SiteManager extends WorkflowExecutor
 	{
 		execNetwork.add(uri);
 		this.totalProcessors += totalProcessors;
-		WorkflowExecutor worker = null;
-		while(worker == null)
+		RemoteWorker rw = null;
+		while(rw == null)
 		{
 			try
 			{
-				worker = WorkflowExecutor.getRemoteExecutor(uri);
+				rw = new RemoteWorker(uri);
 			}
 			catch (NotBoundException ex)
 			{
-				worker = null;
 				try
 				{
 					Thread.currentThread().wait(5000);
 				}
-				catch (InterruptedException ex1){}
+				catch (InterruptedException ex1)
+				{
+					Logger.getLogger(SiteManager.class.getName()).log(Level.SEVERE, null, ex1);
+				}
+				rw = null;
 			}
 		}
-		workerMap.put(uri, worker);
+		remoteWorkers.put(uri, rw);
 	}
 	
-	
+	public RemoteWorker getWorker(String uri)
+	{
+		return remoteWorkers.get(uri);
+	}
 }

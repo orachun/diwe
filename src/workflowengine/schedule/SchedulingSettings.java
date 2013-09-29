@@ -4,16 +4,17 @@
  */
 package workflowengine.schedule;
 
+import java.util.Collection;
+import java.util.Collections;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.Random;
+import java.util.Map;
 import java.util.Set;
+import workflowengine.WorkflowExecutor;
 import workflowengine.resource.ExecutorNetwork;
-import removed.Worker;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 
@@ -21,30 +22,31 @@ import workflowengine.workflow.Workflow;
  *
  * @author udomo
  */
-public class SchedulerSettings
+public class SchedulingSettings
 {
-    private Random r;
+	private WorkflowExecutor we;
     private Workflow wf;
-    private Set<Task> taskSet;
-    private HashMap<Task, String> fixedMapping; //For finished tasks
-    private Set<Task> fixedTasks;
+    private Set<String> taskSet;
+    private HashMap<String, String> fixedMapping; //For finished tasks (TaskUUID, WorkerURI
+    private Set<String> fixedTasks;
     private HashMap<String, Object> params = new HashMap<>();
     private FC fc;
 	private ExecutorNetwork execNetwork;
+	private Map<String, Site> siteMap = new HashMap<>();
 	
-    public SchedulerSettings(Workflow wf, ExecutorNetwork execNetwork)
+    public SchedulingSettings(WorkflowExecutor we, Workflow wf, ExecutorNetwork execNetwork)
 	{
-		this(wf, execNetwork, null, null);
+		this(we, wf, execNetwork, null, null);
 	}
-	public SchedulerSettings(Workflow wf, ExecutorNetwork execNetwork, FC fc)
+	public SchedulingSettings(WorkflowExecutor we, Workflow wf, ExecutorNetwork execNetwork, FC fc)
 	{
-		this(wf, execNetwork, fc, null);
+		this(we, wf, execNetwork, fc, null);
 	}
-	public SchedulerSettings(Workflow wf, ExecutorNetwork execNetwork, HashMap<Task, String> fixedMapping)
+	public SchedulingSettings(WorkflowExecutor we, Workflow wf, ExecutorNetwork execNetwork, HashMap<String, String> fixedMapping)
 	{
-		this(wf, execNetwork, null, fixedMapping);
+		this(we, wf, execNetwork, null, fixedMapping);
 	}
-	public SchedulerSettings(Workflow wf, ExecutorNetwork execNetwork, FC fc, HashMap<Task, String> fixedMapping)
+	public SchedulingSettings(WorkflowExecutor we, Workflow wf, ExecutorNetwork execNetwork, FC fc, HashMap<String, String> fixedMapping)
 	{
 		if(fc == null)
         {
@@ -54,7 +56,7 @@ public class SchedulerSettings
         {
             this.fc = fc;
         }
-        r = new Random();
+		this.we = we;
         this.execNetwork = execNetwork;
         this.fixedMapping = new HashMap<>();
         if(fixedMapping == null)
@@ -69,32 +71,38 @@ public class SchedulerSettings
             fixedTasks = fixedMapping.keySet();
         }
         taskSet = this.wf.getTaskSet();
+		
+		for(String uri : we.getExecutorURIs())
+		{
+			siteMap.put(uri, new Site(uri, we.getWorker(uri).getTotalProcessors()));
+		}
+		siteMap = Collections.unmodifiableMap(siteMap);
 	}
     public FC getFc()
     {
         return fc;
     }
     
-    private Workflow generateWorkflow(Workflow originalWf, HashMap<Task, String> fixedMapping)
+    private Workflow generateWorkflow(Workflow originalWf, HashMap<String, String> fixedMapping)
     {
-		Set<Task> subTasks = originalWf.getTaskSet();
+		Set<String> subTasks = originalWf.getTaskSet();
 		subTasks.removeAll(fixedMapping.keySet());
         return originalWf.getSubworkflow(originalWf.getName(), subTasks);
     }
     
     
-    HashMap<Task, String> getFixedMapping()
+    public HashMap<String, String> getFixedMapping()
     {
         return fixedMapping;
     }
     
-    public boolean isFixedTask(Task t)
+    public boolean isFixedTask(String t)
     {
         return fixedMapping.containsKey(t);
     }
     
     
-    public Set<Task> getFixedTasks()
+    public Set<String> getFixedTasks()
     {
         return new HashSet<>(fixedTasks);
     }
@@ -104,32 +112,21 @@ public class SchedulerSettings
         return taskSet.size();
     }
     
-    public Set<Task> getStartTasks()
+    public Set<String> getStartTasks()
     {
         return wf.getStartTasks();
     }
 
-    public Set<Task> getEndTasks()
+    public Set<String> getEndTasks()
     {
         return wf.getEndTasks();
     }
 
-    public Set<Task> getTaskSet()
+    public Set<String> getTaskUUIDSet()
     {
         return taskSet;
     }
     
-    public Iterable<Task> getTaskIterable()
-    {
-        return new Iterable<Task>() {
-
-            @Override
-            public Iterator<Task> iterator()
-            {
-                return taskSet.iterator();
-            }
-        };
-    }
     
     public Workflow getWorkflow()
 	{
@@ -157,6 +154,41 @@ public class SchedulerSettings
 		return execNetwork;
 	}
     
+	
+	public Collection<Site> getSites()
+	{
+		return siteMap.values();
+	}
+	
+	public Site getSite(String uri)
+	{
+		return siteMap.get(uri);
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
     
     public String getParam(String s)
     {
@@ -196,4 +228,9 @@ public class SchedulerSettings
         return params.containsKey(s);
     }
     
+	public WorkflowExecutor getExecutor()
+	{
+		return we;
+	}
+	
 }

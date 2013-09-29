@@ -2,14 +2,17 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 import java.util.HashMap;
 import removed.ExecSite;
-import static workflowengine.schedule.SA.PROP_DECREASE_RATE;
-import static workflowengine.schedule.SA.PROP_INNER_COUNT;
-import static workflowengine.schedule.SA.PROP_START_TEMP;
-import static workflowengine.schedule.SA.PROP_STOP_TEMP;
+import workflowengine.schedule.Schedule;
+import static workflowengine.schedule.scheduler.SA.PROP_DECREASE_RATE;
+import static workflowengine.schedule.scheduler.SA.PROP_INNER_COUNT;
+import static workflowengine.schedule.scheduler.SA.PROP_START_TEMP;
+import static workflowengine.schedule.scheduler.SA.PROP_STOP_TEMP;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
@@ -47,7 +50,7 @@ public class PSOSA implements Scheduler
         population = new PSOIndividual[POP_SIZE];
     }
     
-    public Schedule getSchedule(SchedulerSettings ss)
+    public Schedule getSchedule(SchedulingSettings ss)
     {
         init();
         SA SASchr = new SA();
@@ -94,7 +97,7 @@ public class PSOSA implements Scheduler
         Utils.setPropIfNotExist(PROP_DECREASE_RATE, "10");
         
         Scheduler schr = new PSOSA();
-        SchedulerSettings ss = new SchedulerSettings(wf, es, new CostOptimizationFC(wf.getCumulatedExecTime()*0.1,10,1));
+        SchedulingSettings ss = new SchedulingSettings(wf, es, new CostOptimizationFC(wf.getCumulatedExecTime()*0.1,10,1));
         
         double total = 0;
         for(int i=0;i<10;i++)

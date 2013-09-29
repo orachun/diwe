@@ -6,27 +6,22 @@ package workflowengine.resource;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
-import java.util.List;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import removed.TaskExecutor;
 import workflowengine.WorkflowExecutor;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 import workflowengine.Worker;
-import workflowengine.communication.message.Message;
 import workflowengine.utils.Utils;
 
 /**
  *
  * @author orachun
  */
-public class Processor extends WorkflowExecutor
+public class ExecutingProcessor extends WorkflowExecutor
 {
 	private Worker manager;
-	public Processor(Worker manager) throws RemoteException
+	public ExecutingProcessor(Worker manager) throws RemoteException
 	{
 		super(false);
 		this.manager = manager;
@@ -34,7 +29,7 @@ public class Processor extends WorkflowExecutor
 	
 	public TaskStatus exec(Task t)
 	{
-		TaskStatus ts = TaskStatus.executingStatus(t);
+		TaskStatus ts = TaskStatus.executingStatus(t.getUUID());
 		manager.setTaskStatus(ts);
 		Process p;
 		try
@@ -157,7 +152,12 @@ public class Processor extends WorkflowExecutor
 	
 	
 	
-	
+
+	@Override
+	public RemoteWorker getWorker(String uri)
+	{
+		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
+	}
 	
 	@Override
 	public void registerWorker(String uri, int totalProcessors)

@@ -7,7 +7,7 @@ package removed;
 import workflowengine.workflow.Task;
 import java.util.HashMap;
 import workflowengine.communication.HostAddress;
-import workflowengine.utils.DBRecord;
+import workflowengine.utils.db.DBRecord;
 import workflowengine.utils.Utils;
 
 /**

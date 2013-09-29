@@ -9,7 +9,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import org.apache.commons.io.input.TeeInputStream;
+import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.WorkflowFile;
 
 /**
@@ -58,12 +58,22 @@ public class ExecutorNetwork
 	public double getTransferTime(String from, String to, Collection<WorkflowFile> wff)
 	{
 		double totalSize = 0;
-		for(WorkflowFile f : wff)
+		for(Object o : wff)
 		{
+			WorkflowFile f;
+			if(o instanceof String)
+			{
+				f = (WorkflowFile)Cacher.get(WorkflowFile.class, o);
+			}
+			else
+			{
+				f = (WorkflowFile)o;
+			}
 			totalSize += f.getSize();
 		}
 		return getTransferTime(from, to, totalSize);
 	}
+	
 	
 	private double linkSpdTest(String to)
 	{

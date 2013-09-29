@@ -1,7 +1,10 @@
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 import static java.lang.Math.exp;
 import java.util.Random;
+import workflowengine.schedule.Schedule;
 import workflowengine.utils.Utils;
 
 public class SA implements Scheduler
@@ -34,7 +37,7 @@ public class SA implements Scheduler
     }
     
     @Override
-    public Schedule getSchedule(SchedulerSettings settings)
+    public Schedule getSchedule(SchedulingSettings settings)
     {
         bestSolution = null;
         int curTemp;
@@ -93,7 +96,7 @@ public class SA implements Scheduler
     }
 
 
-    void slightChange(Schedule sch, SchedulerSettings ss)
+    void slightChange(Schedule sch, SchedulingSettings ss)
     {
         for (int k = 0; k < ss.getTotalTasks(); k++)
         {

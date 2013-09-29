@@ -2,7 +2,11 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
+
+import workflowengine.schedule.Schedule;
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 
 /**
  *
@@ -12,7 +16,7 @@ public class CircularScheduler implements Scheduler
 {
 
     @Override
-    public Schedule getSchedule(SchedulerSettings settings)
+    public Schedule getSchedule(SchedulingSettings settings)
     {
         Schedule s = new Schedule(settings);
         int totalTasks = settings.getTotalTasks();

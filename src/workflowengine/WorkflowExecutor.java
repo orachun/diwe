@@ -13,7 +13,8 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.Set;
 import java.util.logging.Level;
 import workflowengine.communication.HostAddress;
-import workflowengine.schedule.Scheduler;
+import workflowengine.resource.RemoteWorker;
+import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.utils.Utils;
@@ -44,6 +45,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 				throw new RuntimeException(e.getMessage(), e);
 			}
 		}
+		Utils.createDir(Utils.getProp("working_dir"));
 	}
 	public abstract Set<String> getExecutorURIs();
 	protected void schedule(Workflow wf)
@@ -91,4 +93,6 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	{
 		return "//"+host.toString()+"/WorkflowExecutor";
 	}
+	
+	public abstract RemoteWorker getWorker(String uri);
 }

@@ -2,13 +2,17 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
+import workflowengine.schedule.scheduler.Scheduler;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import removed.ExecSite;
+import workflowengine.schedule.Schedule;
+import workflowengine.schedule.ScheduleComparator;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
@@ -30,10 +34,10 @@ public class PSO implements Scheduler
     private static int POP_SIZE;
     private List<PSOIndividual> population = new ArrayList<>();
     private HashMap<String, Object> globalVars;
-    private SchedulerSettings ss;
+    private SchedulingSettings ss;
     private ScheduleComparator scp = new ScheduleComparator();
 
-    public void init(SchedulerSettings ss)
+    public void init(SchedulingSettings ss)
     {
         this.ss = ss;
         Utils.setPropIfNotExist(PROP_ITERATIONS, "100");
@@ -77,7 +81,7 @@ public class PSO implements Scheduler
         return population;
     }
     
-    public Schedule getSchedule(SchedulerSettings ss)
+    public Schedule getSchedule(SchedulingSettings ss)
     {
         this.ss = ss;
         init(ss);
@@ -103,7 +107,7 @@ public class PSO implements Scheduler
      * @param ss
      * @return
      */
-    public Schedule limitBound(int taskUpperBound, int taskLowerBound, int resourceBoundLength, SchedulerSettings ss)
+    public Schedule limitBound(int taskUpperBound, int taskLowerBound, int resourceBoundLength, SchedulingSettings ss)
     {
         init(ss);
         ss.setParam("taskUpperBound", taskUpperBound);
@@ -154,7 +158,7 @@ public class PSO implements Scheduler
         Utils.setPropIfNotExist(PROP_INERTIA_WEIGHT, "0.3");
         
         Scheduler PSO = new PSO();
-        SchedulerSettings ss = new SchedulerSettings(wf, es, new CostOptimizationFC(wf.getCumulatedExecTime()*0.1,10,1));
+        SchedulingSettings ss = new SchedulingSettings(wf, es, new CostOptimizationFC(wf.getCumulatedExecTime()*0.1,10,1));
         
         double total = 0;
         for(int i=0;i<10;i++)

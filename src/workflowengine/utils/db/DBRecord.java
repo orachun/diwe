@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.utils;
+package workflowengine.utils.db;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -13,6 +13,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import workflowengine.utils.Utils;
 import workflowengine.workflow.WorkflowFile;
 
 /**
@@ -94,6 +95,11 @@ public class DBRecord
     {
         return Double.parseDouble(record.get(key));
     }
+	
+	public long getLong(String key)
+	{
+		return Long.parseLong(record.get(key));
+	}
 
     public int getInt(String key)
     {
@@ -136,6 +142,27 @@ public class DBRecord
             }
         }
     }
+	
+	public int upsert(String[] keys)
+	{
+		synchronized (DB_LOCKER)
+        {
+			DBRecord where = new DBRecord();
+			for(String k : keys)
+			{
+				where.set(k, this.get(k));
+			}
+			List<DBRecord> res = select(table, where);
+            if (res.isEmpty())
+            {
+                return insert();
+            }
+			else
+			{
+				return this.update(where);
+			}
+		}
+	}
 
     public String getFirstPrimaryKeyName(String table)
     {
@@ -175,9 +202,16 @@ public class DBRecord
 //            System.out.println(query);
                 Statement smt = con.createStatement();
                 smt.executeUpdate(query.toString(), Statement.RETURN_GENERATED_KEYS);
-                ResultSet rs = smt.getGeneratedKeys();
-                rs.next();
-                return rs.getInt(1);
+                try
+				{
+					ResultSet rs = smt.getGeneratedKeys();
+					rs.next();
+					return rs.getInt(1);
+				}
+				catch (SQLException e)
+				{
+					return 0;
+				}
             }
             catch (SQLException ex)
             {
@@ -359,13 +393,5 @@ public class DBRecord
 
     public static void main(String[] args)
     {
-        for (DBRecord rec : DBRecord.select("workflow_task_file",
-                new DBRecord("workflow_task_file",
-                "type", "O",
-                "tid", 4)))
-        {
-            WorkflowFile wf = WorkflowFile.getFileFromDB(rec.getInt("fid"));
-            System.out.println(wf.toString());
-        }
     }
 }

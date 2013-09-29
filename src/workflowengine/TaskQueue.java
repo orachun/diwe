@@ -14,9 +14,9 @@ import java.util.Queue;
 import java.util.Set;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
+import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
-import workflowengine.workflow.WorkflowFactory;
 
 /**
  *
@@ -24,16 +24,16 @@ import workflowengine.workflow.WorkflowFactory;
  */
 public class TaskQueue
 {
-	protected Map<Task, String> taskMap = new HashMap<>();
-	protected LinkedList<Task> taskQueue = new LinkedList<>();
+	protected Map<String, String> taskMap = new HashMap<>(); //TaskUUID - Worker URI
+	protected LinkedList<String> taskQueue = new LinkedList<>(); //Task UUID
 	
-	public void submit(Task t, String target)
+	public void submit(String t, String target)
 	{
 		taskMap.put(t, target);
 		taskQueue.add(t);
 	}
 	
-	public void submit(Map<Task, String> taskMap)
+	public void submit(Map<String, String> taskMap)
 	{
 		taskQueue.addAll(taskMap.keySet());
 		this.taskMap.putAll(taskMap);
@@ -42,11 +42,10 @@ public class TaskQueue
 	
 	public void submit(String target, Workflow wf)
 	{
-		Queue<Task> tq = wf.getTaskQueue();
+		Queue<String> tq = wf.getTaskQueue();
 		while(!tq.isEmpty())
 		{
-			Task t = tq.poll();
-			submit(t, target);
+			submit(tq.poll(), target);
 		}
 	}
 	
@@ -57,7 +56,7 @@ public class TaskQueue
 	
 	public ScheduleEntry poll()
 	{
-		Task t = taskQueue.poll();
+		String t = taskQueue.poll();
 		if(t == null)
 		{
 			return null;
@@ -76,36 +75,38 @@ public class TaskQueue
 	 */
 	public Map<String, Set<Workflow>> pollNextReadyTasks()
 	{
-		HashMap<String, HashMap<Workflow, List<Task>>> readyTaskMap = new HashMap<>();
-		ListIterator<Task> iterator = taskQueue.listIterator();
+		HashMap<String, HashMap<Workflow, List<String>>> readyTaskMap = new HashMap<>();
+		ListIterator<String> iterator = taskQueue.listIterator();
 		Task t;
+		String taskUUID;
 		while(iterator.hasNext())
 		{
-			t = iterator.next();
+			taskUUID = iterator.next();
+			t = Task.get(taskUUID);
 			if(t.isReady())
 			{
-				String target = taskMap.get(t);
-				HashMap<Workflow, List<Task>> workflowReadyTasksMap = readyTaskMap.get(target);
+				String target = taskMap.get(taskUUID);
+				HashMap<Workflow, List<String>> workflowReadyTasksMap = readyTaskMap.get(target);
 				if(workflowReadyTasksMap == null)
 				{
 					workflowReadyTasksMap = new HashMap<>();
 					readyTaskMap.put(target, workflowReadyTasksMap);
 				}
-				Workflow wf = WorkflowFactory.get(t.getWfUUID());
-				List<Task> readyTaskList = workflowReadyTasksMap.get(wf);
+				Workflow wf = (Workflow)Cacher.get(Workflow.class, t.getWfUUID());
+				List<String> readyTaskList = workflowReadyTasksMap.get(wf);
 				if(readyTaskList == null)
 				{
 					readyTaskList = new LinkedList<>();
 					workflowReadyTasksMap.put(wf, readyTaskList);
 				}
-				readyTaskList.add(t);
+				readyTaskList.add(taskUUID);
 			}
 		}
 		
 		HashMap<String, Set<Workflow>> readyWorkflow = new HashMap<>();
-		for(Map.Entry<String, HashMap<Workflow, List<Task>>> entry: readyTaskMap.entrySet())
+		for(Map.Entry<String, HashMap<Workflow, List<String>>> entry: readyTaskMap.entrySet())
 		{
-			for(Map.Entry<Workflow, List<Task>> workflowEntry : entry.getValue().entrySet())
+			for(Map.Entry<Workflow, List<String>> workflowEntry : entry.getValue().entrySet())
 			{
 				Workflow oriWf = workflowEntry.getKey();
 				Workflow subWf = oriWf.getSubworkflow(oriWf.getName(), workflowEntry.getValue());
@@ -120,9 +121,9 @@ public class TaskQueue
 		}
 		return readyWorkflow;
 	}
-	public String getTargetForTask(Task t)
+	public String getTargetForTask(String taskUUID)
 	{
-		return taskMap.get(t);
+		return taskMap.get(taskUUID);
 	}
 }
 

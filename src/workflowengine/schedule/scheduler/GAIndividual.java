@@ -2,9 +2,11 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.schedule;
+package workflowengine.schedule.scheduler;
 
+import workflowengine.schedule.SchedulingSettings;
 import java.util.Random;
+import workflowengine.schedule.Schedule;
 
 /**
  *
@@ -14,7 +16,7 @@ public class GAIndividual extends Schedule
 {
     private Random r = new Random();
 
-    public GAIndividual(SchedulerSettings settings)
+    public GAIndividual(SchedulingSettings settings)
     {
         super(settings);
     }

@@ -17,13 +17,13 @@ import java.util.logging.Level;
 import workflowengine.communication.Communicator;
 import workflowengine.communication.HostAddress;
 import workflowengine.communication.message.Message;
-import workflowengine.utils.DBRecord;
+import workflowengine.utils.db.DBRecord;
 import workflowengine.schedule.Schedule;
-import workflowengine.schedule.Scheduler;
-import workflowengine.schedule.SchedulerSettings;
+import workflowengine.schedule.scheduler.Scheduler;
+import workflowengine.schedule.SchedulingSettings;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.schedule.fc.FC;
-import workflowengine.utils.DBException;
+import workflowengine.utils.db.DBException;
 import workflowengine.utils.Logger;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
@@ -295,7 +295,7 @@ public class TaskManager extends Service
                     );
         
         System.out.println("getting new schedule...");
-        SchedulerSettings ss = new SchedulerSettings(wf, getExecSite(), fixedMapping, fc);
+        SchedulingSettings ss = new SchedulingSettings(wf, getExecSite(), fixedMapping, fc);
         Schedule currentSch = (Schedule)Utils.readFromFile("schedule_wf"+wfid+".sch");
         ss.setParam("current_schedule", currentSch);
         Schedule newSchedule = getScheduler().getSchedule(ss);
@@ -356,7 +356,7 @@ public class TaskManager extends Service
             int estopr = r.getInt("estopr");
             double progress = elapsedTime/(double)estopr;;
             progress = Math.min(1, progress);
-            total += progress * es.getTransferTime(t.getOutputFiles());
+            total += progress * es.getTransferTime(t.getOutputFileUUIDs());
         }
         return total;
     }
@@ -454,7 +454,7 @@ public class TaskManager extends Service
                     Utils.getDoubleProp(CostOptimizationFC.PROP_WEIGHTED_PENALTY)
                     );
             Workflow.setStartedTime(wf.getDbid(), Utils.time());
-            schedule = getScheduler().getSchedule(new SchedulerSettings(wf, getExecSite(), fc));
+            schedule = getScheduler().getSchedule(new SchedulingSettings(wf, getExecSite(), fc));
             scheduledTime = Utils.time();
             Workflow.setScheduledTime(wf.getDbid(), scheduledTime);
             logger.log("Makespan:\t"+schedule.getMakespan());
@@ -476,7 +476,7 @@ public class TaskManager extends Service
 
     public void updateScheduleForWorkflow(Workflow wf, Schedule schedule, long startTime) throws DBException
     {
-        SchedulerSettings ss = schedule.getSettings();
+        SchedulingSettings ss = schedule.getSettings();
         for (Task t : wf.getTaskIterator())
         {
             if(!ss.isFixedTask(t))
@@ -531,9 +531,9 @@ public class TaskManager extends Service
                 msg.set("tid", t.getDbid());
                 msg.set("wfid", t.getWfdbid());
                 msg.set(Message.PARAM_WORKER_UUID, r.get("uuid"));
-                msg.set("input_files", t.getInputFiles());
+                msg.set("input_files", t.getInputFileUUIDs());
                 msg.set("file_dir", dir);
-                msg.set("output_files", t.getOutputFiles());
+                msg.set("output_files", t.getOutputFileUUIDs());
                 if (t.getStatus() == Task.STATUS_SUSPENDED)
                 {
                     msg.set("migrate", true);
