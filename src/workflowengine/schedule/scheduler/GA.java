@@ -1,13 +1,10 @@
 package workflowengine.schedule.scheduler;
 
 import workflowengine.schedule.SchedulingSettings;
-import workflowengine.schedule.scheduler.Scheduler;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
-import removed.ExecSite;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleComparator;
 import workflowengine.schedule.fc.CostOptimizationFC;
@@ -73,7 +70,7 @@ public class GA implements Scheduler
         MUTATE_RATE = Utils.getDoubleProp(PROP_MUTATE_RATE);
         
         population = new ArrayList<>();
-        population.add(new GAIndividual(new HEFTScheduler().getSchedule(settings)));
+        population.add(new GAIndividual(new HEFT().getSchedule(settings)));
         for (int i = 0; i < POP_SIZE; i++)
         {
             GAIndividual ind = new GAIndividual(settings);

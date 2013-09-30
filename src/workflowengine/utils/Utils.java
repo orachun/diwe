@@ -24,8 +24,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
-import removed.TaskManager;
-import workflowengine.workflow.Workflow;
 //import org.apache.commons.vfs.FileSystemException;
 
 /**
@@ -506,5 +504,10 @@ public class Utils
 		Object o = ois.readObject();
 		ois.close();
 		return o;
+	}
+	
+	public static boolean fileExists(String path)
+	{
+		return new File(path).exists();
 	}
 }

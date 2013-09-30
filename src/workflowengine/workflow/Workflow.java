@@ -9,14 +9,11 @@ import java.io.FileNotFoundException;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
-import removed.TaskManager;
 import workflowengine.utils.db.DBException;
 import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
@@ -50,7 +47,7 @@ public class Workflow implements Serializable, Savable
 	protected boolean isFinished = false;
 	protected long cumulatedEstimatedExecTime = -1;
 	
-    public Workflow(String name, String uuid) throws DBException
+    public Workflow(String name, String uuid)
     {
         this.name = name;
 		this.uuid = uuid;
@@ -76,8 +73,6 @@ public class Workflow implements Serializable, Savable
             }
             catch(IOException | InterruptedException ex)
             {
-                TaskManager.logger.log(ex.getMessage());
-                TaskManager.logger.log("Exception while creating a dummy input file: "+ex.getMessage());
             }
         }
     }
@@ -88,8 +83,7 @@ public class Workflow implements Serializable, Savable
 	 */
 	public void finalizeWorkflow()
 	{
-		new File(Utils.getProp("working_dir")+uuid).mkdir();
-		
+				
 		inputFiles = new HashSet<>();
 		outputFiles = new HashSet<>();
 		
@@ -110,9 +104,9 @@ public class Workflow implements Serializable, Savable
 	
 	/////////////////////////Getters and Setters//////////////////////
 	
-    public List<WorkflowFile> getInputFiles()
+    public Set<String> getInputFiles()
     {
-        return new ArrayList(inputFiles);
+        return new HashSet(inputFiles);
     }
 	
     public String getWorkingDirSuffix()

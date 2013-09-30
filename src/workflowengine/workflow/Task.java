@@ -38,21 +38,21 @@ public class Task implements Serializable, Comparable<Task>, Savable
     }
 	
     
-    public void addInputFile(WorkflowFile f) throws DBException
+    public void addInputFile(WorkflowFile f)
     {
         inputs.add(f.getUUID());
     }
 
-    public void addOutputFile(WorkflowFile f) throws DBException
+    public void addOutputFile(WorkflowFile f)
     {
         outputs.add(f.getUUID());
     }
 	
-    public Set<String> getInputFileUUIDs() throws DBException
+    public Set<String> getInputFileUUIDs()
     {
         return new HashSet<>(inputs);
     }
-    public Set<String> getOutputFileUUIDs() throws DBException
+    public Set<String> getOutputFileUUIDs()
     {
         return new HashSet<>(outputs);
     }

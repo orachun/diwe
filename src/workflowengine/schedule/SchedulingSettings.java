@@ -13,9 +13,8 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import workflowengine.WorkflowExecutor;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.resource.ExecutorNetwork;
-import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 
 /**
@@ -77,6 +76,7 @@ public class SchedulingSettings
 			siteMap.put(uri, new Site(uri, we.getWorker(uri).getTotalProcessors()));
 		}
 		siteMap = Collections.unmodifiableMap(siteMap);
+		
 	}
     public FC getFc()
     {
@@ -144,7 +144,7 @@ public class SchedulingSettings
 			}
 		};
     }
-    public int getTotalWorkerURIs()
+    public int getTotalWorkers()
     {
         return execNetwork.getExecutorURISet().size();
     }
@@ -165,8 +165,20 @@ public class SchedulingSettings
 		return siteMap.get(uri);
 	}
 	
+	public String[] taskArray()
+	{
+		return this.taskSet.toArray(new String[this.getTotalTasks()]);
+	}
+	public String[] siteArray()
+	{
+		return this.execNetwork.getExecutorURISet()
+				.toArray(new String[this.getTotalWorkers()]);
+	}
 	
-	
+	public String getAnyWorker()
+	{
+		return this.execNetwork.getExecutorURISet().iterator().next();
+	}
 	
 	
 	

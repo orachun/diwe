@@ -7,11 +7,11 @@ package workflowengine.resource;
 import java.io.IOException;
 import java.rmi.RemoteException;
 import java.util.Set;
-import workflowengine.WorkflowExecutor;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
-import workflowengine.Worker;
+import workflowengine.server.Worker;
 import workflowengine.utils.Utils;
 
 /**
@@ -21,14 +21,19 @@ import workflowengine.utils.Utils;
 public class ExecutingProcessor extends WorkflowExecutor
 {
 	private Worker manager;
+	private Process currentProcess;
 	public ExecutingProcessor(Worker manager) throws RemoteException
 	{
-		super(false);
+		super();
 		this.manager = manager;
 	}
 	
 	public TaskStatus exec(Task t)
 	{
+		if(currentProcess != null)
+		{
+			throw new IllegalStateException("Executing other process.");
+		}
 		TaskStatus ts = TaskStatus.executingStatus(t.getUUID());
 		manager.setTaskStatus(ts);
 		Process p;
@@ -47,6 +52,7 @@ public class ExecutingProcessor extends WorkflowExecutor
 			try
 			{
 				int ret = p.waitFor();
+				currentProcess = null;
 				if(ret == 0)
 				{
 					ts = ts.complete();
@@ -84,8 +90,15 @@ public class ExecutingProcessor extends WorkflowExecutor
                 manager.getWorkingDir(),
                 manager.getWorkingDir() + t.getUUID() + ".stdout",
                 manager.getWorkingDir() + t.getUUID() + ".stderr", "");
-        return pb.start();
+        currentProcess = pb.start();
+		return currentProcess;
     }
+
+	@Override
+	public void stop() throws RemoteException
+	{
+		currentProcess.destroy();
+	}
 	
 	
 	

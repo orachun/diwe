@@ -2,17 +2,14 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine;
+package workflowengine.server;
 
-import removed.TaskManager;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Set;
-import java.util.logging.Level;
-import workflowengine.communication.HostAddress;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
@@ -27,18 +24,23 @@ import workflowengine.workflow.Workflow;
  */
 public abstract class WorkflowExecutor extends UnicastRemoteObject implements WorkflowExecutorInterface
 {
-	private HostAddress host;
+
+	protected String uri;
+
 	protected WorkflowExecutor() throws RemoteException
 	{
-		this(true);
+		uri = "";
 	}
-	protected WorkflowExecutor(boolean registerForRMI) throws RemoteException
+
+	protected WorkflowExecutor(boolean registerForRMI, String name) throws RemoteException
 	{
-		if(registerForRMI)
+		this.uri = "//" + Utils.getProp("local_hostname") + "/" + name;
+		if (registerForRMI)
 		{
 			try
 			{
-				Naming.rebind("WorkflowExecutor", this);
+				System.out.println("Binding workflow executor to URI: " + uri);
+				Naming.rebind(name, this);
 			}
 			catch (MalformedURLException e)
 			{
@@ -47,52 +49,61 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 		}
 		Utils.createDir(Utils.getProp("working_dir"));
 	}
+
 	public abstract Set<String> getExecutorURIs();
+
 	protected void schedule(Workflow wf)
 	{
 		throw new UnsupportedOperationException("Not implemented yet");
 	}
+
 	public Task getNextReadyTask()
 	{
 		throw new UnsupportedOperationException("Not implemented yet");
 	}
+
 	public abstract void dispatchTask();
-	public static WorkflowExecutor getRemoteExecutor(String weURI) throws NotBoundException
+
+	public static WorkflowExecutorInterface getRemoteExecutor(String weURI) throws NotBoundException
 	{
 		try
 		{
-			return (WorkflowExecutor)Naming.lookup(weURI);
+			return (WorkflowExecutorInterface) Naming.lookup(weURI);
 		}
 		catch (MalformedURLException | RemoteException e)
 		{
 			throw new RuntimeException(e.getMessage(), e);
 		}
 	}
-	
-	protected Scheduler getScheduler() 
-    {
-        try
-        {
-            Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
-            Scheduler s = (Scheduler) c.newInstance();
-            return s;
-        }
-        catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex)
-        {
-            java.util.logging.Logger.getLogger(TaskManager.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        return null;
-    }
-	
+
+	protected Scheduler getScheduler()
+	{
+		try
+		{
+			Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
+			Scheduler s = (Scheduler) c.newInstance();
+			return s;
+		}
+		catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex)
+		{
+		}
+		return null;
+	}
+
 	protected FC getDefaultFC()
 	{
 		return new MakespanFC();
 	}
-	
+
 	public String getURI()
 	{
-		return "//"+host.toString()+"/WorkflowExecutor";
+		return uri;
 	}
-	
+
 	public abstract RemoteWorker getWorker(String uri);
+
+	public void greeting(String msg)
+	{
+		System.out.println(msg);
+	}
 }

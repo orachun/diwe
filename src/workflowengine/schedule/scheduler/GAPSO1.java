@@ -36,7 +36,7 @@ public class GAPSO1 implements Scheduler
         ga.init(settings);
         pso.init(settings);
         
-        Schedule heftSchedule = new HEFTScheduler().getSchedule(settings);
+        Schedule heftSchedule = new HEFT().getSchedule(settings);
         List<GAIndividual> gapop = ga.getPop();
         List<PSOIndividual> psopop = pso.getPop();
 

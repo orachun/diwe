@@ -55,7 +55,7 @@ public class ExecutorNetwork
 		double mbps = Math.min(getLinkToWorker(to).MBps, getLinkToWorker(from).MBps);
 		return sizeInMB/mbps;
 	}
-	public double getTransferTime(String from, String to, Collection<WorkflowFile> wff)
+	public double getTransferTime(String from, String to, Collection wff)
 	{
 		double totalSize = 0;
 		for(Object o : wff)
@@ -78,6 +78,6 @@ public class ExecutorNetwork
 	private double linkSpdTest(String to)
 	{
 		//TODO: implement this
-		throw new UnsupportedOperationException("Not implemented yet.");
+		return 10;
 	}
 }

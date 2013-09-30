@@ -2,12 +2,14 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine;
+package workflowengine.server;
 
 import java.io.File;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.ExecutingProcessor;
@@ -18,6 +20,7 @@ import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -25,7 +28,7 @@ import workflowengine.workflow.Workflow;
  */
 public class Worker extends WorkflowExecutor
 {
-	protected SiteManager manager;
+	protected WorkflowExecutorInterface manager;
 	protected int totalProcessors;
 	protected static Worker instant;
 	private TaskQueue taskQueue = new TaskQueue();
@@ -33,9 +36,11 @@ public class Worker extends WorkflowExecutor
 	private ExecutingProcessor[] processors;
 	private String workingDir;
 	private int workingProcessors = 0;
+	private static final Object INPUT_FILE_WAITING_LOCK = new Object();
 	
 	protected Worker()  throws RemoteException
 	{
+		super(true, "Worker@"+Utils.getProp("local_port"));
 		totalProcessors = Runtime.getRuntime().availableProcessors();
 		processors = new ExecutingProcessor[totalProcessors];
 		execNetwork = new ExecutorNetwork();
@@ -45,12 +50,14 @@ public class Worker extends WorkflowExecutor
 			processors[i] = new ExecutingProcessor(this);
 		}
 		
-		String managerURI = "//"+Utils.getProp("manager_host")+":"+Utils.getProp("manager_port");
+		String managerURI = "//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port");
 		while(manager == null)
 		{
 			try
 			{
-				manager = (SiteManager)WorkflowExecutor.getRemoteExecutor(managerURI);
+				manager = (WorkflowExecutorInterface)WorkflowExecutor.getRemoteExecutor(managerURI);
+				manager.registerWorker(this.getURI(), totalProcessors);
+				manager.greeting("Hello from "+uri);
 			}
 			catch (NotBoundException ex)
 			{
@@ -59,7 +66,7 @@ public class Worker extends WorkflowExecutor
 		}
 	}
 	
-	public static Worker get() 
+	public static Worker start() 
 	{
 		if(instant == null)
 		{
@@ -75,19 +82,47 @@ public class Worker extends WorkflowExecutor
 		return instant;
 	}
 	
+	public void stop()
+	{
+		System.exit(0);
+	}
 	@Override
 	public void submit(Workflow wf)  
 	{
 		wf.setSubmitted(Utils.time());
 		wf.save();
-		//TODO: wait until all input files exist
+		
+		//Wait for all input file exists
+		for(String inputFileUUID : wf.getInputFiles())
+		{
+			WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+			while(!Utils.fileExists(workingDir+"/"+wff.getName()))
+			{
+				synchronized(INPUT_FILE_WAITING_LOCK)
+				{
+					try
+					{
+						INPUT_FILE_WAITING_LOCK.wait();
+					}
+					catch (InterruptedException ex){}
+				}
+			}
+		}
 		
 		Schedule s = this.getScheduler().getSchedule(
 				new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
 		taskQueue.submit(s.getMapping());
 		dispatchTask();
 	}
-
+	
+	public void notifyInputFileArrival()
+	{
+		synchronized(INPUT_FILE_WAITING_LOCK)
+		{
+			INPUT_FILE_WAITING_LOCK.notifyAll();
+		}
+	}
+	
 	@Override
 	public int getTotalProcessors()  
 	{
@@ -124,8 +159,15 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public void setTaskStatus(TaskStatus status)  
 	{
-		//TODO: store task status to local db
-		manager.setTaskStatus(status);
+		try
+		{
+			//TODO: store task status to local db
+			manager.setTaskStatus(status);
+		}
+		catch (RemoteException ex)
+		{
+			Logger.getLogger(Worker.class.getName()).log(Level.SEVERE, null, ex);
+		}
 		if(status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			workingProcessors--;
@@ -212,5 +254,11 @@ public class Worker extends WorkflowExecutor
 	public String getWorkingDir()
 	{
 		return workingDir;
+	}
+	
+	
+	public static void main(String[] args)
+	{
+		Worker.start();
 	}
 }

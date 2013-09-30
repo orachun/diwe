@@ -6,7 +6,7 @@ package workflowengine.resource;
 
 import java.util.Collection;
 import java.util.Set;
-import workflowengine.WorkflowExecutor;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.workflow.WorkflowFile;
 
 /**

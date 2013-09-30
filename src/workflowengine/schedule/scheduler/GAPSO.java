@@ -37,7 +37,7 @@ public class GAPSO extends GA
         init(settings);
         population = new ArrayList<>();
         
-        Schedule HEFTs = new HEFTScheduler().getSchedule(settings);
+        Schedule HEFTs = new HEFT().getSchedule(settings);
         GAIndividual HEFTInd = new GAIndividual(HEFTs);
         population.add(HEFTInd);
         for (int i = 0; i < POP_SIZE; i++)
@@ -112,7 +112,7 @@ public class GAPSO extends GA
         Utils.setPropIfNotExist(PSO.PROP_INERTIA_WEIGHT, "0.2");
         
         Scheduler GASch = new GAPSO();
-        Scheduler HEFTSch = new HEFTScheduler();
+        Scheduler HEFTSch = new HEFT();
         SchedulingSettings ss = new SchedulingSettings(wf, es, new CostOptimizationFC());
         Schedule HEFTs = HEFTSch.getSchedule(ss);
         System.out.println(HEFTs.getFitness());

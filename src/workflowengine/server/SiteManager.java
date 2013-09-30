@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine;
+package workflowengine.server;
 
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -18,6 +18,7 @@ import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Workflow;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -31,17 +32,20 @@ public class SiteManager extends WorkflowExecutor
 	private int totalProcessors = 0;
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
 	private TaskQueue taskQueue = new TaskQueue();
+	private static final Object INPUT_FILE_WAITING_LOCK = new Object();
 	
 	protected SiteManager() throws RemoteException
 	{
-		if(Utils.hasProp("manager_host") && Utils.hasProp("manager_port"))
+		super(true, "SiteManager@"+Utils.getProp("local_port"));
+		if(Utils.hasProp("manager_host") && !Utils.getProp("manager_host").isEmpty() && Utils.hasProp("manager_port") && !Utils.getProp("manager_port").isEmpty())
 		{
-			String managerURI = "//" + Utils.getProp("manager_host") + ":" + Utils.getProp("manager_port");
+			String managerURI = "//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port");
 			while (manager == null)
 			{
 				try
 				{
 					manager = (SiteManager) WorkflowExecutor.getRemoteExecutor(managerURI);
+					manager.greeting("Hello from "+uri);
 				}
 				catch (NotBoundException ex)
 				{
@@ -51,7 +55,7 @@ public class SiteManager extends WorkflowExecutor
 		}
 	}
 
-	public static SiteManager get() 
+	public static SiteManager start() 
 	{
 		if(instant == null)
 		{
@@ -67,18 +71,49 @@ public class SiteManager extends WorkflowExecutor
 		return instant;
 	}
 	
+	public void stop()
+	{
+		System.exit(0);
+	}
+	
 	@Override
 	public void submit(Workflow wf) 
 	{
 		wf.setSubmitted(Utils.time());
 		wf.save();
-		//TODO: wait until all input files exist
+		String workingDir = Utils.getProp("working_dir")+"/"+wf.getUUID();
+		Utils.createDir(workingDir);
+		
+		//Wait for all input file exists
+		for(String inputFileUUID : wf.getInputFiles())
+		{
+			WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+			while(!Utils.fileExists(workingDir+"/"+wff.getName()))
+			{
+				synchronized(INPUT_FILE_WAITING_LOCK)
+				{
+					try
+					{
+						INPUT_FILE_WAITING_LOCK.wait();
+					}
+					catch (InterruptedException ex){}
+				}
+			}
+		}
 		
 		Schedule s = this.getScheduler().getSchedule(new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
 		taskQueue.submit(s);
 		dispatchTask();
 	}
 
+	public void notifyInputFileArrival()
+	{
+		synchronized(INPUT_FILE_WAITING_LOCK)
+		{
+			INPUT_FILE_WAITING_LOCK.notifyAll();
+		}
+	}
+	
 	@Override
 	public int getTotalProcessors() 
 	{
@@ -97,10 +132,17 @@ public class SiteManager extends WorkflowExecutor
 		Map<String, Set<Workflow>>  se = taskQueue.pollNextReadyTasks();
 		for(Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 		{
-			WorkflowExecutor we = remoteWorkers.get(entry.getKey()).getWorker();
+			WorkflowExecutorInterface we = remoteWorkers.get(entry.getKey()).getWorker();
 			for(Workflow wf : entry.getValue())
 			{
-				we.submit(wf);
+				try
+				{
+					we.submit(wf);
+				}
+				catch (RemoteException ex)
+				{
+					Logger.getLogger(SiteManager.class.getName()).log(Level.SEVERE, null, ex);
+				}
 			}
 		}
 	}
@@ -139,11 +181,29 @@ public class SiteManager extends WorkflowExecutor
 				rw = null;
 			}
 		}
+		if(manager != null)
+		{
+			manager.registerWorker(this.getURI(), this.totalProcessors);
+		}
 		remoteWorkers.put(uri, rw);
+		try
+		{
+			rw.getWorker().greeting("Hello from "+this.getURI());
+		}
+		catch (RemoteException ex)
+		{
+			Logger.getLogger(SiteManager.class.getName()).log(Level.SEVERE, null, ex);
+		}
 	}
 	
+	@Override
 	public RemoteWorker getWorker(String uri)
 	{
 		return remoteWorkers.get(uri);
+	}
+	
+	public static void main(String[] args)
+	{
+		SiteManager.start();
 	}
 }

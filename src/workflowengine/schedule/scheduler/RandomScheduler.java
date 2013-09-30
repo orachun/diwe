@@ -4,7 +4,6 @@
  */
 package workflowengine.schedule.scheduler;
 
-import java.util.LinkedList;
 import java.util.Random;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
@@ -19,12 +18,13 @@ public class RandomScheduler implements Scheduler
     public Schedule getSchedule(SchedulingSettings settings)
     {
         Schedule s = new Schedule(settings);
-		LinkedList<String> sites = new LinkedList<>(settings.getExecNetwork().getExecutorURISet());
+		String[] sites = settings.siteArray();
 		Random r = new Random();
 		for(String taskUUID: settings.getTaskUUIDSet())
 		{
-			s.setWorkerForTask(taskUUID, sites.get(r.nextInt(sites.size())));
+			s.setWorkerForTask(taskUUID, sites[r.nextInt(sites.length)]);
 		}
+		s.evaluate();
         return s;
     }
 }
