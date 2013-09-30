@@ -5,6 +5,7 @@
 package workflowengine.utils;
 
 import java.io.BufferedReader;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
@@ -18,12 +19,14 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.net.Socket;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
+import workflowengine.communication.HostAddress;
 //import org.apache.commons.vfs.FileSystemException;
 
 /**
@@ -509,5 +512,35 @@ public class Utils
 	public static boolean fileExists(String path)
 	{
 		return new File(path).exists();
+	}
+	
+	/**
+	 * Send a file to a server that running workflowengine.utils.FileServer
+	 * @param host
+	 * @param port
+	 * @param filepath 
+	 */
+	public static void sendFile(HostAddress addr, String filepath)
+	{
+		Socket s;
+		try
+		{
+			s = new Socket(addr.getHost(), addr.getPort());
+			DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+			FileInputStream fis = new FileInputStream(filepath);
+			byte[] buffer = new byte[4096];
+
+			while (fis.read(buffer) > 0)
+			{
+				dos.write(buffer);
+			}
+
+			fis.close();
+			dos.close();
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
 	}
 }

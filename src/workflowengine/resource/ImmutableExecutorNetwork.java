@@ -6,7 +6,6 @@ package workflowengine.resource;
 
 import java.util.Collection;
 import java.util.Set;
-import workflowengine.server.WorkflowExecutor;
 import workflowengine.workflow.WorkflowFile;
 
 /**
@@ -46,7 +45,7 @@ public class ImmutableExecutorNetwork extends ExecutorNetwork
 	}
 
 	@Override
-	public double getTransferTime(String from, String to, Collection<WorkflowFile> wff)
+	public double getTransferTime(String from, String to, Collection wff)
 	{
 		return n.getTransferTime(from, to, wff);
 	}

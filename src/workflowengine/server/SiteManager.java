@@ -9,14 +9,13 @@ import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
+import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFile;
 
@@ -26,25 +25,29 @@ import workflowengine.workflow.WorkflowFile;
  */
 public class SiteManager extends WorkflowExecutor
 {
-	private SiteManager manager;
+	private WorkflowExecutorInterface manager;
 	private HashMap<String, RemoteWorker> remoteWorkers = new HashMap<>();
 	protected static SiteManager instant;
 	private int totalProcessors = 0;
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
 	private TaskQueue taskQueue = new TaskQueue();
-	private static final Object INPUT_FILE_WAITING_LOCK = new Object();
 	
 	protected SiteManager() throws RemoteException
 	{
 		super(true, "SiteManager@"+Utils.getProp("local_port"));
-		if(Utils.hasProp("manager_host") && !Utils.getProp("manager_host").isEmpty() && Utils.hasProp("manager_port") && !Utils.getProp("manager_port").isEmpty())
+		if(
+				Utils.hasProp("manager_host") 
+				&& !Utils.getProp("manager_host").isEmpty() 
+				&& Utils.hasProp("manager_port") 
+				&& !Utils.getProp("manager_port").isEmpty()
+				)
 		{
 			String managerURI = "//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port");
 			while (manager == null)
 			{
 				try
 				{
-					manager = (SiteManager) WorkflowExecutor.getRemoteExecutor(managerURI);
+					manager = (WorkflowExecutorInterface) WorkflowExecutor.getRemoteExecutor(managerURI);
 					manager.greeting("Hello from "+uri);
 				}
 				catch (NotBoundException ex)
@@ -81,6 +84,8 @@ public class SiteManager extends WorkflowExecutor
 	{
 		wf.setSubmitted(Utils.time());
 		wf.save();
+		
+		
 		String workingDir = Utils.getProp("working_dir")+"/"+wf.getUUID();
 		Utils.createDir(workingDir);
 		
@@ -88,32 +93,16 @@ public class SiteManager extends WorkflowExecutor
 		for(String inputFileUUID : wf.getInputFiles())
 		{
 			WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-			while(!Utils.fileExists(workingDir+"/"+wff.getName()))
-			{
-				synchronized(INPUT_FILE_WAITING_LOCK)
-				{
-					try
-					{
-						INPUT_FILE_WAITING_LOCK.wait();
-					}
-					catch (InterruptedException ex){}
-				}
-			}
+			String filename = workingDir+"/"+wff.getName();
+			FileManager.get().waitForFile(filename);
 		}
 		
 		Schedule s = this.getScheduler().getSchedule(new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
+		FileManager.get().setSchedule(s);
 		taskQueue.submit(s);
 		dispatchTask();
 	}
 
-	public void notifyInputFileArrival()
-	{
-		synchronized(INPUT_FILE_WAITING_LOCK)
-		{
-			INPUT_FILE_WAITING_LOCK.notifyAll();
-		}
-	}
-	
 	@Override
 	public int getTotalProcessors() 
 	{
@@ -132,17 +121,24 @@ public class SiteManager extends WorkflowExecutor
 		Map<String, Set<Workflow>>  se = taskQueue.pollNextReadyTasks();
 		for(Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 		{
-			WorkflowExecutorInterface we = remoteWorkers.get(entry.getKey()).getWorker();
-			for(Workflow wf : entry.getValue())
+			final WorkflowExecutorInterface we = remoteWorkers.get(entry.getKey()).getWorker();
+			for (final Workflow wf : entry.getValue())
 			{
-				try
+				new Thread()
 				{
-					we.submit(wf);
-				}
-				catch (RemoteException ex)
-				{
-					Logger.getLogger(SiteManager.class.getName()).log(Level.SEVERE, null, ex);
-				}
+					@Override
+					public void run()
+					{
+						try
+						{
+							we.submit(wf);
+						}
+						catch (RemoteException ex)
+						{
+							logger.log("Cannot submit workflow to remote worker.", ex);
+						}
+					}
+				}.start();
 			}
 		}
 	}
@@ -150,10 +146,20 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public void setTaskStatus(TaskStatus status)  
 	{
-		//TODO: store task status to local db
-		manager.setTaskStatus(status);
+		Task.get(status.taskUUID).setStatus(status);
 		
-		throw new UnsupportedOperationException("Not supported.");
+		if(manager != null)
+		{
+			try
+			{
+				manager.setTaskStatus(status);
+			}
+			catch (RemoteException ex)
+			{
+				logger.log("Cannot upload task status to manager.", ex);
+			}
+		}
+		
 	}
 
 	@Override
@@ -176,14 +182,21 @@ public class SiteManager extends WorkflowExecutor
 				}
 				catch (InterruptedException ex1)
 				{
-					Logger.getLogger(SiteManager.class.getName()).log(Level.SEVERE, null, ex1);
+					logger.log("Cannot connect to worker.", ex1);
 				}
 				rw = null;
 			}
 		}
 		if(manager != null)
 		{
-			manager.registerWorker(this.getURI(), this.totalProcessors);
+			try
+			{
+				manager.registerWorker(this.getURI(), this.totalProcessors);
+			}
+			catch (RemoteException ex)
+			{
+				logger.log("Cannot update total processors to manager.", ex);
+			}
 		}
 		remoteWorkers.put(uri, rw);
 		try
@@ -192,7 +205,7 @@ public class SiteManager extends WorkflowExecutor
 		}
 		catch (RemoteException ex)
 		{
-			Logger.getLogger(SiteManager.class.getName()).log(Level.SEVERE, null, ex);
+			logger.log("Cannot send hello msg to worker.", ex);
 		}
 	}
 	
@@ -205,5 +218,6 @@ public class SiteManager extends WorkflowExecutor
 	public static void main(String[] args)
 	{
 		SiteManager.start();
+		
 	}
 }

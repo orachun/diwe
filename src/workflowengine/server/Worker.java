@@ -8,8 +8,6 @@ import java.io.File;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.ExecutingProcessor;
@@ -92,35 +90,19 @@ public class Worker extends WorkflowExecutor
 		wf.setSubmitted(Utils.time());
 		wf.save();
 		
+		
 		//Wait for all input file exists
 		for(String inputFileUUID : wf.getInputFiles())
 		{
 			WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-			while(!Utils.fileExists(workingDir+"/"+wff.getName()))
-			{
-				synchronized(INPUT_FILE_WAITING_LOCK)
-				{
-					try
-					{
-						INPUT_FILE_WAITING_LOCK.wait();
-					}
-					catch (InterruptedException ex){}
-				}
-			}
+			String filename = workingDir+"/"+wff.getName();
+			FileManager.get().waitForFile(filename);
 		}
 		
 		Schedule s = this.getScheduler().getSchedule(
 				new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
 		taskQueue.submit(s.getMapping());
 		dispatchTask();
-	}
-	
-	public void notifyInputFileArrival()
-	{
-		synchronized(INPUT_FILE_WAITING_LOCK)
-		{
-			INPUT_FILE_WAITING_LOCK.notifyAll();
-		}
 	}
 	
 	@Override
@@ -143,14 +125,14 @@ public class Worker extends WorkflowExecutor
 			final ScheduleEntry se = taskQueue.poll();
 			if(se!=null)
 			{
-				new Thread(new Runnable() {
+				new Thread(){
 
 					@Override
 					public void run()
 					{
 						processors[se.target.charAt(0)].exec(Task.get(se.taskUUID));
 					}
-				}).start();
+				}.start();
 				workingProcessors++;
 			}
 		}
@@ -161,12 +143,12 @@ public class Worker extends WorkflowExecutor
 	{
 		try
 		{
-			//TODO: store task status to local db
+			Task.get(status.taskUUID).setStatus(status);
 			manager.setTaskStatus(status);
 		}
 		catch (RemoteException ex)
 		{
-			Logger.getLogger(Worker.class.getName()).log(Level.SEVERE, null, ex);
+			logger.log("Cannot upload task status to manager.", ex);
 		}
 		if(status.status == TaskStatus.STATUS_COMPLETED)
 		{

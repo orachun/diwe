@@ -10,10 +10,12 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Set;
+import workflowengine.communication.HostAddress;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
+import workflowengine.utils.Logger;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
@@ -24,12 +26,13 @@ import workflowengine.workflow.Workflow;
  */
 public abstract class WorkflowExecutor extends UnicastRemoteObject implements WorkflowExecutorInterface
 {
-
+	protected HostAddress addr;
 	protected String uri;
-
+	protected Logger logger = Utils.getLogger();
 	protected WorkflowExecutor() throws RemoteException
 	{
 		uri = "";
+		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
 	}
 
 	protected WorkflowExecutor(boolean registerForRMI, String name) throws RemoteException
@@ -105,5 +108,11 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	public void greeting(String msg)
 	{
 		System.out.println(msg);
+	}
+	
+	@Override
+	public HostAddress getAddr()
+	{
+		return addr;
 	}
 }

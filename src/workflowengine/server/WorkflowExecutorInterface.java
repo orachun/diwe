@@ -6,6 +6,7 @@ package workflowengine.server;
 
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import workflowengine.communication.HostAddress;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 
@@ -26,4 +27,7 @@ public interface WorkflowExecutorInterface extends Remote
 	public void greeting(String msg) throws RemoteException;
 
 	public void stop() throws RemoteException;
+	
+	public HostAddress getAddr() throws RemoteException;
+	
 }

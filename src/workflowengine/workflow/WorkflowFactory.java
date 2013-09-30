@@ -177,8 +177,8 @@ public class WorkflowFactory
 						WorkflowFile wfile = new WorkflowFile(fname, fsize, ftype, Utils.uuid());
                         if (fiotype.equals("input"))
                         {
-                            cmdBuilder.append("i;");
-                            task.addInputFile(wfile);
+//                            cmdBuilder.append("i;");
+//                            task.addInputFile(wfile);
                         }
                         else
                         {

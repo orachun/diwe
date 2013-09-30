@@ -1,12 +1,10 @@
 package workflowengine.workflow;
 
 import java.io.Serializable;
-import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
-import workflowengine.utils.db.DBException;
 import workflowengine.utils.db.DBRecord;
 import workflowengine.utils.db.Cacher;
 import workflowengine.utils.db.Savable;
@@ -72,12 +70,16 @@ public class Task implements Serializable, Comparable<Task>, Savable
         return files;
     }
 
+	public void setStatus(TaskStatus s)
+	{
+		this.status = s;
+	}
 	
 	
 	
 	public boolean isReady()
 	{
-		throw new UnsupportedOperationException("Not implemented yet.");
+		return DBRecord.select("_not_ready_task", new DBRecord().set("tid", this.uuid)).size() == 0;
 	}
 	
 	

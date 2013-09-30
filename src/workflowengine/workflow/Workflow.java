@@ -47,6 +47,9 @@ public class Workflow implements Serializable, Savable
 	protected boolean isFinished = false;
 	protected long cumulatedEstimatedExecTime = -1;
 	
+	protected Set<Task> allTasks = null;	//All tasks for transfer over servers
+	protected Set<WorkflowFile> allFiles = null; //All files for transfer over servers
+	
     public Workflow(String name, String uuid)
     {
         this.name = name;
@@ -310,13 +313,33 @@ public class Workflow implements Serializable, Savable
 				.set("cumulated_time", cumulatedEstimatedExecTime)
 				.upsert(workflowKeys);
 		
+		if(allTasks != null)
+		{
+			for(Task task: allTasks)
+			{
+				task.save();
+				Cacher.cache(task.getUUID(), task);
+			}
+			allTasks = null;
+		}
+		if (allFiles != null)
+		{
+			for (WorkflowFile f : allFiles)
+			{
+				f.save();
+				Cacher.cache(f.getUUID(), f);
+			}
+			allFiles = null;
+		}
+		
 		//Save all tasks
 		for(String taskUUID: getTaskSet())
 		{
-			Savable task = Cacher.get(taskUUID);
+			Task task = (Task)Cacher.get(taskUUID);
 			if(task != null)
 			{
 				task.save();
+				Cacher.cache(task.getUUID(), task);
 			}
 		}
 		
@@ -334,7 +357,37 @@ public class Workflow implements Serializable, Savable
 			}
 		}
 		
+		
+		
+		System.gc();
 	}
+	
+	
+	public void prepareRemoteSubmit()
+	{
+		allTasks = new HashSet<>();
+		allFiles = new HashSet<>();
+		
+		for(String t : getStartTasks())
+		{
+			Task task = Task.get(t);
+			for(String f : task.getInputFileUUIDs())
+			{
+				allFiles.add(WorkflowFile.get(f));
+			}
+		}
+		
+		for(String t : taskGraph.getNodeSet())
+		{
+			Task task = Task.get(t);
+			allTasks.add(task);
+			for(String f : task.getOutputFileUUIDs())
+			{
+				allFiles.add(WorkflowFile.get(f));
+			}
+		}
+	}
+	
 	
 	
     public static void main(String[] args) throws DBException, FileNotFoundException
