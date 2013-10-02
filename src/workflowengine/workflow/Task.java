@@ -17,21 +17,21 @@ import workflowengine.utils.db.Savable;
 public class Task implements Serializable, Comparable<Task>, Savable
 {
     private String uuid;
-    private String wfUUID;
     private double estimateExecTime;
     private String cmd;
+	private String name;
 	private TaskStatus status;
     private Set<String> inputs = new HashSet<>(); //WorkflowFile
     private Set<String> outputs = new HashSet<>(); //WorkflowFile
 
-    public Task(String wfUUID, String cmd, double estimateExecTime, String uuid, TaskStatus status)
+    public Task(String name, String cmd, double estimateExecTime, String uuid, TaskStatus status)
     {
+		this.name = name;
         this.estimateExecTime = estimateExecTime;
-        this.wfUUID = wfUUID;
         this.cmd = cmd;
 		this.uuid = uuid;
 		this.status = status;
-		this.status.taskUUID = uuid;
+		this.status.taskID = uuid;
 		Cacher.cache(uuid, this);
     }
 	
@@ -50,14 +50,14 @@ public class Task implements Serializable, Comparable<Task>, Savable
     {
         return new HashSet<>(inputs);
     }
-    public Set<String> getOutputFileUUIDs()
+    public Set<String> getOutputFiles()
     {
         return new HashSet<>(outputs);
     }
 
     public Set<String> getOutputFileUUIDsForTask(String childTaskUUID)
     {
-        Set<String> out = this.getOutputFileUUIDs();
+        Set<String> out = this.getOutputFiles();
         Set<String> in = Task.get(childTaskUUID).getInputFileUUIDs();
         Set<String> files = new HashSet<>();
         for (String f : in)
@@ -101,7 +101,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	{
 		int hash = 7;
 		hash = 29 * hash + Objects.hashCode(this.uuid);
-		hash = 29 * hash + Objects.hashCode(this.wfUUID);
+//		hash = 29 * hash + Objects.hashCode(this.wfUUID);
 		hash = 29 * hash + Objects.hashCode(this.cmd);
 		return hash;
 	}
@@ -132,10 +132,10 @@ public class Task implements Serializable, Comparable<Task>, Savable
 		return estimateExecTime;
 	}
 
-    public String getWfUUID()
-    {
-        return wfUUID;
-    }
+//    public String getWfUUID()
+//    {
+//        return wfUUID;
+//    }
 
     public void setCmd(String cmd)
     {
@@ -147,6 +147,17 @@ public class Task implements Serializable, Comparable<Task>, Savable
         return cmd;
     }
 
+	public String getName()
+	{
+		return name;
+	}
+	
+	public TaskStatus getStatus()
+	{
+		return status;
+	}
+	
+	
 	public static Task get(String taskUUID)
 	{
 		return (Task)Cacher.get(Task.class, taskUUID);
@@ -155,7 +166,8 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	public static Task getInstance(Object key)
 	{
 		try{
-			DBRecord record = DBRecord.select("workflow_task", new DBRecord()
+			DBRecord record = DBRecord.select("task", 
+					new DBRecord()
 					.set("tid", key.toString())).get(0);
 			TaskStatus s = new TaskStatus(
 					record.get("tid"),
@@ -165,7 +177,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
 					record.getLong("start"),
 					record.getLong("finish"));
 			Task t = new Task(
-					record.get("wfid"),
+					record.get("name"),
 					record.get("cmd"),
 					record.getDouble("estopr"),
 					record.get("tid"),
@@ -194,9 +206,9 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	@Override
 	public void save()
 	{
-		new DBRecord("workflow_task")
+		new DBRecord("task")
 				.set("tid", uuid)
-				.set("wfid", wfUUID)
+				.set("name", name)
 				.set("cmd", cmd)
 				.set("status", String.valueOf(status.status))
 				.set("estopr", (long)estimateExecTime)

@@ -4,21 +4,32 @@
  */
 package workflowengine.server;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import workflowengine.communication.HostAddress;
+import workflowengine.monitor.HTMLUtils;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.utils.Logger;
+import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
+import workflowengine.utils.db.DBRecord;
 import workflowengine.workflow.Task;
+import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
+import workflowengine.workflow.WorkflowFactory;
 
 /**
  *
@@ -26,13 +37,18 @@ import workflowengine.workflow.Workflow;
  */
 public abstract class WorkflowExecutor extends UnicastRemoteObject implements WorkflowExecutorInterface
 {
+	protected WorkflowExecutorInterface manager;
+	protected String managerURI;
 	protected HostAddress addr;
 	protected String uri;
 	protected Logger logger = Utils.getLogger();
+	protected int totalProcessors = 0;
+//	protected Set<String> notFinishedWorkflows = new HashSet<>();
 	protected WorkflowExecutor() throws RemoteException
 	{
 		uri = "";
 		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
+		
 	}
 
 	protected WorkflowExecutor(boolean registerForRMI, String name) throws RemoteException
@@ -49,23 +65,34 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 			{
 				throw new RuntimeException(e.getMessage(), e);
 			}
+
+			if (Utils.hasProp("manager_host")
+					&& !Utils.getProp("manager_host").isEmpty()
+					&& Utils.hasProp("manager_port")
+					&& !Utils.getProp("manager_port").isEmpty())
+			{
+				managerURI = "//" + Utils.getProp("manager_host") 
+						+ "/SiteManager@" + Utils.getProp("manager_port");
+				while (manager == null)
+				{
+					try
+					{
+						manager = (WorkflowExecutorInterface) WorkflowExecutor
+								.getRemoteExecutor(managerURI);
+						manager.registerWorker(uri, totalProcessors);
+						manager.greeting("Hello from " + uri);
+					}
+					catch (NotBoundException ex)
+					{
+						manager = null;
+					}
+				}
+			}
 		}
 		Utils.createDir(Utils.getProp("working_dir"));
 	}
 
-	public abstract Set<String> getExecutorURIs();
 
-	protected void schedule(Workflow wf)
-	{
-		throw new UnsupportedOperationException("Not implemented yet");
-	}
-
-	public Task getNextReadyTask()
-	{
-		throw new UnsupportedOperationException("Not implemented yet");
-	}
-
-	public abstract void dispatchTask();
 
 	public static WorkflowExecutorInterface getRemoteExecutor(String weURI) throws NotBoundException
 	{
@@ -78,6 +105,10 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 			throw new RuntimeException(e.getMessage(), e);
 		}
 	}
+	public static WorkflowExecutorInterface getSiteManager() throws NotBoundException
+	{
+		return getRemoteExecutor("//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port"));
+	}
 
 	protected Scheduler getScheduler()
 	{
@@ -89,6 +120,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 		}
 		catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex)
 		{
+			logger.log("Cannot get a scheduler.", ex);
 		}
 		return null;
 	}
@@ -103,8 +135,8 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 		return uri;
 	}
 
-	public abstract RemoteWorker getWorker(String uri);
 
+	@Override
 	public void greeting(String msg)
 	{
 		System.out.println(msg);
@@ -115,4 +147,185 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	{
 		return addr;
 	}
+
+
+	@Override
+	public String getTaskMappingHTML() throws RemoteException
+	{
+		HashMap<String, String> mapping = new HashMap<>();
+		for(DBRecord r : DBRecord.selectAll("schedule"))
+		{
+			mapping.put(r.get("tid"), r.get("wkid"));
+		}
+		for(DBRecord r : DBRecord.selectAll("schedule"))
+		{
+			mapping.put(r.get("tid"), r.get("wkid"));
+		}
+		
+		StringBuilder mappingHTML = new StringBuilder();
+		for(Map.Entry<String, String> entry : mapping.entrySet())
+		{
+			String tid = entry.getKey();
+			String wkid = entry.getValue();
+			Task t = Task.get(tid);
+			mappingHTML.append("<div>[")
+					.append(t.getStatus().status)
+					.append("]")
+					.append(t.getName())
+					.append(":")
+					.append(wkid)
+					.append("</div>");
+		}
+		return mappingHTML.toString();
+	}
+	
+	@Override
+	public String getStatusHTML() throws RemoteException
+	{
+		StringBuilder sb = new StringBuilder();
+		sb.append("<h1>System Status</h1>").append(HTMLUtils.nl2br(SystemStats.getStat()));
+		sb.append("<br/>").append("Total Processors: ").append(this.totalProcessors);
+		sb.append("<br/>").append("Manager URI: ").append(this.managerURI);
+		sb.append("<h1>Workers</h1>");
+		Set<String> workerSet = getWorkerSet();
+		if(workerSet != null)
+		{
+			sb.append("<ul>");
+			for(String w : workerSet)
+			{
+				sb.append("<li>").append(w).append("</li>");
+			}
+			sb.append("</ul>");
+		}
+		return sb.toString();
+	}
+	
+	
+	@Override
+	public void setTaskStatus(TaskStatus status)
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public String getManagerURI() throws RemoteException
+	{
+		return managerURI;
+	}
+
+	@Override
+	public void submit(Workflow wf, Properties prop)
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public void submit(String dax, Properties prop) throws RemoteException
+	{
+		try
+		{
+			File f = File.createTempFile("dax", ".daxtmp");
+			FileWriter fw = new FileWriter(f);
+			fw.append(dax);
+			fw.close();
+			Workflow wf = WorkflowFactory.fromDummyDAX(f.getAbsolutePath());
+			wf.isDummy = true;
+			wf.prepareRemoteSubmit();
+			submit(wf, prop);
+		}
+		catch (IOException ex)
+		{
+			throw new RemoteException(ex.getMessage(), ex);
+		}
+	}
+	
+
+	@Override
+	public Set<String> getWorkerSet()
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	public Set<String> getExecutorURIs()
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+	
+	
+	
+	public void dispatchTask()
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+	
+	
+	
+	public RemoteWorker getWorker(String uri)
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+	
+	
+	
+	@Override
+	public String getTaskQueueHTML() throws RemoteException
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+	
+	
+	
+	
+
+	@Override
+	public int getTotalProcessors() throws RemoteException
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+
+	@Override
+	public void registerWorker(String uri, int totalProcessors) throws RemoteException
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public void stop() throws RemoteException
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public String getWorkingDir() throws RemoteException
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+
+	
+
+	
+	
 }

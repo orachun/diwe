@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
@@ -31,7 +32,7 @@ public class Workflow implements Serializable, Savable
     public static final char STATUS_SCHEDULED = 'S';
     public static final char STATUS_COMPLETED = 'C';
     
-    
+    public boolean isDummy = false;
     protected String uuid;
     protected char status = STATUS_SUBMITTED;
     protected DirectedGraph<String> taskGraph = new DirectedGraph<>();
@@ -61,8 +62,12 @@ public class Workflow implements Serializable, Savable
     {
         for(String fuuid : this.inputFiles)
         {
-			WorkflowFile f = (WorkflowFile)Cacher.get(WorkflowFile.class, fuuid);
-            String outfile = destDir + f.getName();
+			WorkflowFile f = WorkflowFile.get(fuuid);
+			if(f == null)
+			{
+				System.out.println();
+			}
+            String outfile = destDir + "/" + f.getName();
             File file = new File(outfile);
             file.getParentFile().mkdirs();
             try
@@ -86,19 +91,21 @@ public class Workflow implements Serializable, Savable
 	 */
 	public void finalizeWorkflow()
 	{
-				
-		inputFiles = new HashSet<>();
-		outputFiles = new HashSet<>();
+		HashSet<String> tmpInputFiles = new HashSet<>();
+		HashSet<String> tmpOutputFiles = new HashSet<>();
 		
         for(String taskUUID : taskGraph.getNodeSet())
         {
 			Task t = (Task)Cacher.get(Task.class, taskUUID);
-            inputFiles.addAll(t.getInputFileUUIDs());
-			outputFiles.addAll(t.getOutputFileUUIDs());
-			
-            inputFiles.removeAll(t.getOutputFileUUIDs());
-			outputFiles.removeAll(t.getInputFileUUIDs());
+            tmpInputFiles.addAll(t.getInputFileUUIDs());
+			tmpOutputFiles.addAll(t.getOutputFiles());
         }
+        
+		inputFiles = new HashSet<>(tmpInputFiles);
+		outputFiles = new HashSet<>(tmpOutputFiles);
+		
+		inputFiles.removeAll(tmpOutputFiles);
+		outputFiles.removeAll(tmpInputFiles);
 	}
     
  
@@ -143,16 +150,23 @@ public class Workflow implements Serializable, Savable
 		Workflow w = new Workflow(name, Utils.uuid());
 		for(String taskUUID : tasksInSubWf)
 		{
-			for(String cTaskUUID : this.getChild(taskUUID))
+			w.taskGraph.addNode(taskUUID);
+			for (String cTaskUUID : this.getChild(taskUUID))
 			{
-				w.taskGraph.addNodes(taskUUID, cTaskUUID);
+				if (tasksInSubWf.contains(cTaskUUID))
+				{
+					w.taskGraph.addNodes(taskUUID, cTaskUUID);
+				}
 			}
-			for(String pTaskUUID : this.getParent(taskUUID))
+			for (String pTaskUUID : this.getParent(taskUUID))
 			{
-				w.taskGraph.addNodes(pTaskUUID, taskUUID);
+				if (tasksInSubWf.contains(pTaskUUID))
+				{
+					w.taskGraph.addNodes(pTaskUUID, taskUUID);
+				}
 			}
 		}
-        w.finalizeWorkflow();
+		w.finalizeWorkflow();
 		return w;
 	}
     
@@ -221,6 +235,18 @@ public class Workflow implements Serializable, Savable
         return uuid;
     }
 	
+	public boolean isTaskReady(String tid)
+	{
+		for(String parent : this.getParent(tid))
+		{
+			if(Task.get(parent).getStatus().status != TaskStatus.STATUS_COMPLETED)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+	
     @Override
     public String toString()
     {
@@ -275,29 +301,42 @@ public class Workflow implements Serializable, Savable
 		return taskGraph.getLeaves();
 	}
 	
-//	public static Workflow getInstant(Object key)
-//	{
-//		try{
-//			DBRecord r = DBRecord.select("workflow",
-//					new DBRecord().set("wfid", key.toString())).get(0);
-//			Workflow wf = new Workflow(r.get("name"), r.get("wfid"));
-//			wf.cumulatedEstimatedExecTime = r.getLong("cumulated_time");
-//			wf.estimatedFinishedTime = r.getLong("est_finish");
-//			wf.finishedTime = r.getLong("finished_at");
-//			wf.scheduledTime = r.getLong("scheduled_at");
-//			wf.startTime = r.getLong("started_at");
-//			wf.status = r.get("status").charAt(0);
-//			wf.submitted = r.getLong("submitted");
-//			return wf;
-//		}
-//		catch (IndexOutOfBoundsException e)
-//		{
-//			return null;
-//		}
-//	}
+	public static Workflow get(String uuid)
+	{
+		return (Workflow)Cacher.get(Workflow.class, uuid);
+	}
+	
+	public static Workflow getInstance(Object key)
+	{
+		try{
+			DBRecord r = DBRecord.select("workflow",
+					new DBRecord().set("wfid", key.toString())).get(0);
+			Workflow wf = new Workflow(r.get("name"), r.get("wfid"));
+			wf.cumulatedEstimatedExecTime = r.getLong("cumulated_time");
+			wf.estimatedFinishedTime = r.getLong("est_finish");
+			wf.finishedTime = r.getLong("finished_at");
+			wf.scheduledTime = r.getLong("scheduled_at");
+			wf.startTime = r.getLong("started_at");
+			wf.status = r.get("status").charAt(0);
+			wf.submitted = r.getLong("submitted");
+			
+			List<DBRecord> res = DBRecord.select("workflow_task_depen",
+					new DBRecord().set("wfid", key.toString()));
+			for(DBRecord r2 : res)
+			{
+				wf.taskGraph.addNodes(r2.get("parent"), r2.get("child"));
+			}
+			return wf;
+		}
+		catch (IndexOutOfBoundsException e)
+		{
+			return null;
+		}
+	}
 
 	
 	private static final String[] workflowKeys = new String[]{"wfid"};
+	private static final String[] workflowTaskKeys = new String[]{"wfid", "tid"};
 	private static final String[] taskDepenKeys = new String[]{"parent", "child"};
 	@Override
 	public void save()
@@ -320,7 +359,6 @@ public class Workflow implements Serializable, Savable
 				task.save();
 				Cacher.cache(task.getUUID(), task);
 			}
-			allTasks = null;
 		}
 		if (allFiles != null)
 		{
@@ -329,24 +367,19 @@ public class Workflow implements Serializable, Savable
 				f.save();
 				Cacher.cache(f.getUUID(), f);
 			}
-			allFiles = null;
 		}
 		
-		//Save all tasks
-		for(String taskUUID: getTaskSet())
-		{
-			Task task = (Task)Cacher.get(taskUUID);
-			if(task != null)
-			{
-				task.save();
-				Cacher.cache(task.getUUID(), task);
-			}
-		}
+		
 		
 		Queue<String> taskQueue = this.getTaskQueue();
 		while(!taskQueue.isEmpty())
 		{
 			String task = taskQueue.poll();
+			new DBRecord("workflow_task")
+					.set("wfid", this.uuid)
+					.set("tid", task)
+					.upsert(workflowTaskKeys);
+			
 			for(String child : this.getChild(task))
 			{
 				new DBRecord("workflow_task_depen")
@@ -356,9 +389,6 @@ public class Workflow implements Serializable, Savable
 						.upsert(taskDepenKeys);
 			}
 		}
-		
-		
-		
 		System.gc();
 	}
 	
@@ -381,13 +411,37 @@ public class Workflow implements Serializable, Savable
 		{
 			Task task = Task.get(t);
 			allTasks.add(task);
-			for(String f : task.getOutputFileUUIDs())
+			for(String f : task.getOutputFiles())
 			{
 				allFiles.add(WorkflowFile.get(f));
 			}
 		}
 	}
 	
+	public void finalizedRemoteSubmit()
+	{
+		if (allFiles != null)
+		{
+			for (WorkflowFile f : allFiles)
+			{
+				Cacher.cache(f.getUUID(), f);
+			}
+			allFiles = null;
+		}
+		if(allTasks != null)
+		{
+			for(Task task: allTasks)
+			{
+				Cacher.cache(task.getUUID(), task);
+			}
+			allTasks = null;
+		}
+	}
+	
+	public boolean containsTask(String tid)
+	{
+		return taskGraph.getNodeSet().contains(tid);
+	}
 	
 	
     public static void main(String[] args) throws DBException, FileNotFoundException

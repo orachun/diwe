@@ -96,8 +96,11 @@ public class Utils
     
     public static void setProp(Properties p)
     {
-        initProp();
-        PROP.putAll(p);
+		if(p!=null)
+		{
+			initProp();
+			PROP.putAll(p);
+		}
     }
     
     public static void setPropIfNotExist(String name, String val)
@@ -345,8 +348,8 @@ public class Utils
             String workingDir, String stdoutFile, String stderrFile, 
             String additionalPath)
     {
-        ProcessBuilder pb = new ProcessBuilder(cmds).directory(new File(
-                workingDir));
+        ProcessBuilder pb = new ProcessBuilder(cmds)
+				.directory(new File(workingDir));
         if(stderrFile != null && !stderrFile.isEmpty())
         {
             pb.redirectError(new File(stderrFile));

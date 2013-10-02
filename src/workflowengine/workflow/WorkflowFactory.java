@@ -29,6 +29,7 @@ public class WorkflowFactory
 	
 	public static Workflow fromDAX(String filename) throws DBException
     {
+		HashMap<String, WorkflowFile> files = new HashMap<>();
         File f = new File(filename);
         Workflow wf = new Workflow(f.getName(), Utils.uuid());
         try
@@ -58,7 +59,8 @@ public class WorkflowFactory
                         runtime = AVG_WORKLOAD;
                     }
 					
-					Task task = new Task(wf.getUUID(), "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
+                    String taskName = id+jobElement.getAttribute("name");  
+					Task task = new Task(taskName, "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
 					
 					
                     StringBuilder cmdBuilder = new StringBuilder();
@@ -73,7 +75,12 @@ public class WorkflowFactory
                         String fiotype = fileElement.getAttribute("link");
                         char ftype = WorkflowFile.TYPE_FILE;
                         double fsize = 1;
-						WorkflowFile wfile = new WorkflowFile(fname, fsize, ftype, Utils.uuid());
+						WorkflowFile wfile = files.get(fname);
+						if(wfile == null)
+						{
+							wfile = new WorkflowFile(fname, fsize, ftype, Utils.uuid());
+							files.put(fname, wfile);
+						}
                         if (fiotype.equals("input"))
                         {
                             cmdBuilder.append("i;");
@@ -81,11 +88,11 @@ public class WorkflowFactory
                         }
                         else
                         {
-                            cmdBuilder.append("o;");
                             task.addOutputFile(wfile);
+                            cmdBuilder.append("o;");
                         }
-                        cmdBuilder.append(fname).append(";");
-                        cmdBuilder.append(fsize).append(";");
+						cmdBuilder.append(fname).append(";");
+						cmdBuilder.append(fsize).append(";");
                     }
                     cmdBuilder.deleteCharAt(cmdBuilder.length()-1);
                     String cmd = XMLUtils.argumentTagToCmd(jobElement);
@@ -137,15 +144,16 @@ public class WorkflowFactory
 	
     public static Workflow fromDummyDAX(String filename)
     {
+		HashMap<String, WorkflowFile> files = new HashMap<>();
         File f = new File(filename);
         Workflow wf = new Workflow(f.getName(), Utils.uuid());
+		WorkflowFile dummyFile = new WorkflowFile("dummy", 0.0088, WorkflowFile.TYPE_EXEC, Utils.uuid());
         try
         {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
             DocumentBuilder db = dbf.newDocumentBuilder();
             Document dom = db.parse(filename);
             Element docEle = dom.getDocumentElement();
-            String namespace = "Dummy";
             NodeList jobNodeList = docEle.getElementsByTagName("job");
             HashMap<Integer, Task> tasks = new HashMap<>();
             if (jobNodeList != null && jobNodeList.getLength() > 0)
@@ -158,12 +166,15 @@ public class WorkflowFactory
                     int id = Integer.parseInt(idString.substring(2));
 //                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//   
 
-                    String taskName = jobElement.getAttribute("name");      
-                    int runtime = (int)Math.ceil(Double.parseDouble(jobElement.getAttribute("runtime"))/2);
-					Task task = new Task(wf.getUUID(), "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
+                    String taskName = id+jobElement.getAttribute("name");      
+//                    int runtime = (int)Math.ceil(Double.parseDouble(jobElement.getAttribute("runtime")));
+					int runtime = 3;
+					Task task = new Task(taskName, "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
+					
                     StringBuilder cmdBuilder = new StringBuilder();
-                    cmdBuilder.append("dummy.sh;").append(runtime).append(";");
+                    cmdBuilder.append("dummy;").append(runtime).append(";");
                     tasks.put(id, task);
+					task.addInputFile(dummyFile);
 
                     NodeList fileNodeList = jobElement.getElementsByTagName("uses");
                     for (int j = 0; j < fileNodeList.getLength(); j++)
@@ -174,19 +185,25 @@ public class WorkflowFactory
                         char ftype = WorkflowFile.TYPE_FILE;
 
                         double fsize = 1+Math.round(Double.parseDouble(fileElement.getAttribute("size"))*Utils.BYTE);
-						WorkflowFile wfile = new WorkflowFile(fname, fsize, ftype, Utils.uuid());
+						
+						WorkflowFile wfile = files.get(fname);
+						if(wfile == null)
+						{
+							wfile = new WorkflowFile(fname, fsize, ftype, Utils.uuid());
+							files.put(fname, wfile);
+						}
                         if (fiotype.equals("input"))
                         {
-//                            cmdBuilder.append("i;");
-//                            task.addInputFile(wfile);
+                            cmdBuilder.append("i;");
+                            task.addInputFile(wfile);
                         }
                         else
                         {
                             cmdBuilder.append("o;");
-                            task.addOutputFile(wfile);
+							task.addOutputFile(wfile);
                         }
-                        cmdBuilder.append(fname).append(";");
-                        cmdBuilder.append((int)fsize).append(";");
+						cmdBuilder.append(fname).append(";");
+						cmdBuilder.append((int)fsize).append(";");
                     }
                     cmdBuilder.deleteCharAt(cmdBuilder.length()-1);
                     task.setCmd(cmdBuilder.toString());
@@ -229,5 +246,6 @@ public class WorkflowFactory
         System.gc();
         return wf;
     }
+	
 	
 }

@@ -5,11 +5,18 @@
 package workflowengine;
 
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.rmi.NotBoundException;
 import java.util.Properties;
-import workflowengine.communication.Communicator;
-import workflowengine.communication.message.Message;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.utils.Utils;
+import workflowengine.workflow.Workflow;
+import workflowengine.workflow.WorkflowFactory;
 
 /**
  *
@@ -19,42 +26,50 @@ public class SubmitWorkflow
 {
     public static void usage()
     {
-        System.out.println("Usage: SubmitWorkflow DAX_FILE INPUT_FILE_DIR [option=value] ...");
+        System.out.println("Usage: SubmitWorkflow DAX_FILE [option=value] ...");
     }
     
     public static void main(String[] args) throws IOException
     {
-        if(args.length < 2)
+        if(args.length < 1)
         {
-            System.err.println("Please specify DAG file and input file directory.");
+            System.err.println("Please specify DAG file.");
             usage();
             System.exit(1);
         }
         String daxFile = args[0];
-        String inputDir = args[1];
         
         Properties p = new Properties();
         
-        if(args[2].contains("="))
-        {
-            for(int i=2;i<args.length;i++)
-            {
-                String[] prop = args[i].split("=");
-                p.setProperty(prop[0].trim(), prop[1].trim());
-            }
-        }
-        else
-        {
-            p.load(new FileInputStream(args[2]));
-        }
-        
-        Message msg = new Message(Message.TYPE_SUBMIT_WORKFLOW);
-        msg.set("dax_file", daxFile);
-        msg.set("input_dir", inputDir);
-        msg.set("properties", p);
-        
-        String host = Utils.getProp("task_manager_host");
-        int port = Utils.getIntProp("task_manager_port");
-        new Communicator("Workflow Submitor").sendMessage(host, port, msg);
+		if (args.length > 1)
+		{
+			if (args[1].contains("="))
+			{
+				for (int i = 1; i < args.length; i++)
+				{
+					String[] prop = args[i].split("=");
+					p.setProperty(prop[0].trim(), prop[1].trim());
+				}
+			}
+			else
+			{
+				p.load(new FileInputStream(args[2]));
+			}
+		}
+
+		Utils.setProp(p);
+		
+		daxFile = "/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml";
+		//daxFile = "/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Simple_5.xml";
+		String dax = Charset.forName("UTF-8").decode(ByteBuffer.wrap(Files.readAllBytes(Paths.get(daxFile)))).toString();
+		
+		try
+		{
+			WorkflowExecutor.getSiteManager().submit(dax, null);
+		}
+		catch (NotBoundException ex)
+		{
+			System.err.println("Site manager is not found.");
+		}
     }
 }

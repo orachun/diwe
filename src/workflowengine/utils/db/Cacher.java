@@ -6,7 +6,9 @@ package workflowengine.utils.db;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -16,14 +18,17 @@ import java.util.logging.Logger;
  */
 public class Cacher
 {
-	private static int maxCacheSize = 500;
+	private static int maxCacheSize = 5500;
 	private static HashMap<Object, Savable> cache = new HashMap<>();
 	private static LinkedList keyQ = new LinkedList();
 	public static void cache(Object key, Savable obj)
 	{
-		cache.put(key, obj);
-		keyQ.add(key);
-		flush();
+		if(key != null && obj != null)
+		{
+			cache.put(key, obj);
+			keyQ.add(key);
+			flush();
+		}
 	}
 	
 	/**
@@ -66,7 +71,8 @@ public class Cacher
 	{
 		while(keyQ.size()>maxCacheSize/2)
 		{
-			cache.remove(keyQ.poll()).save();
+			Object obj = keyQ.poll();
+			cache.remove(obj).save();
 		}
 	}
 	
@@ -76,5 +82,27 @@ public class Cacher
 		{
 			cache.remove(keyQ.poll()).save();
 		}
+	}
+	
+	public static void saveAll()
+	{
+		for(Savable obj : cache.values())
+		{
+			obj.save();
+		}
+	}
+	
+	public Set<?> getAllInstances(Class<?> c)
+	{
+		Set s = new HashSet<>();
+		for(Savable obj : cache.values())
+		{
+			try
+			{
+				s.add(c.cast(obj));
+			}
+			catch(ClassCastException e){}
+		}
+		return s;
 	}
 }

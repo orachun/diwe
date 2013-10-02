@@ -7,6 +7,7 @@ package workflowengine.server;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import workflowengine.workflow.TaskStatus;
@@ -25,37 +26,14 @@ import workflowengine.workflow.WorkflowFile;
  */
 public class SiteManager extends WorkflowExecutor
 {
-	private WorkflowExecutorInterface manager;
 	private HashMap<String, RemoteWorker> remoteWorkers = new HashMap<>();
 	protected static SiteManager instant;
-	private int totalProcessors = 0;
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
 	private TaskQueue taskQueue = new TaskQueue();
 	
 	protected SiteManager() throws RemoteException
 	{
 		super(true, "SiteManager@"+Utils.getProp("local_port"));
-		if(
-				Utils.hasProp("manager_host") 
-				&& !Utils.getProp("manager_host").isEmpty() 
-				&& Utils.hasProp("manager_port") 
-				&& !Utils.getProp("manager_port").isEmpty()
-				)
-		{
-			String managerURI = "//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port");
-			while (manager == null)
-			{
-				try
-				{
-					manager = (WorkflowExecutorInterface) WorkflowExecutor.getRemoteExecutor(managerURI);
-					manager.greeting("Hello from "+uri);
-				}
-				catch (NotBoundException ex)
-				{
-					manager = null;
-				}
-			}
-		}
 	}
 
 	public static SiteManager start() 
@@ -80,27 +58,46 @@ public class SiteManager extends WorkflowExecutor
 	}
 	
 	@Override
-	public void submit(Workflow wf) 
+	public void submit(final Workflow wf, final java.util.Properties prop) 
 	{
-		wf.setSubmitted(Utils.time());
-		wf.save();
-		
-		
-		String workingDir = Utils.getProp("working_dir")+"/"+wf.getUUID();
-		Utils.createDir(workingDir);
-		
-		//Wait for all input file exists
-		for(String inputFileUUID : wf.getInputFiles())
+		final SiteManager thisSite = this;
+		new Thread("WORKFLOW_SUBMIT_TH")
 		{
-			WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-			String filename = workingDir+"/"+wff.getName();
-			FileManager.get().waitForFile(filename);
-		}
-		
-		Schedule s = this.getScheduler().getSchedule(new SchedulingSettings(this, wf, execNetwork, this.getDefaultFC()));
-		FileManager.get().setSchedule(s);
-		taskQueue.submit(s);
-		dispatchTask();
+			@Override
+			public void run()
+			{
+				logger.log("Workflow "+wf.getUUID()+" is submitted.");
+				Utils.setProp(prop);
+				wf.setSubmitted(Utils.time());
+				wf.save();
+				wf.finalizedRemoteSubmit();
+
+				if(wf.isDummy)
+				{
+					wf.createDummyInputFiles(thisSite.getWorkingDir());
+				}
+//				String workingDir = Utils.getProp("working_dir")+"/"+wf.getUUID();
+//				Utils.createDir(workingDir);
+
+				//Wait for all input file exists
+				logger.log("Waiting for all input files...");
+				for(String inputFileUUID : wf.getInputFiles())
+				{
+					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+					FileManager.get().waitForFile(wff);
+				}
+				logger.log("Done.", false);
+
+				logger.log("Scheduling the submitted workflow...");
+				Schedule s = thisSite.getScheduler().getSchedule(new SchedulingSettings(thisSite, wf, execNetwork, thisSite.getDefaultFC()));
+				s.save();
+				logger.log("Done.", false);
+
+				FileManager.get().setSchedule(s);
+				taskQueue.submit(s);
+				dispatchTask();
+			}
+		}.start();
 	}
 
 	@Override
@@ -121,24 +118,25 @@ public class SiteManager extends WorkflowExecutor
 		Map<String, Set<Workflow>>  se = taskQueue.pollNextReadyTasks();
 		for(Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 		{
-			final WorkflowExecutorInterface we = remoteWorkers.get(entry.getKey()).getWorker();
+			String workerURI = entry.getKey();
+			final WorkflowExecutorInterface we = remoteWorkers.get(workerURI).getWorker();
 			for (final Workflow wf : entry.getValue())
 			{
-				new Thread()
+				logger.log("Dispatching subworkflow "+wf.getUUID()+ " to "+ workerURI);
+				for(String tid: wf.getTaskQueue())
 				{
-					@Override
-					public void run()
-					{
-						try
-						{
-							we.submit(wf);
-						}
-						catch (RemoteException ex)
-						{
-							logger.log("Cannot submit workflow to remote worker.", ex);
-						}
-					}
-				}.start();
+					logger.log("  "+Task.get(tid).getName());
+				}
+				logger.log("------------------------");
+				wf.prepareRemoteSubmit();
+				try
+				{
+					we.submit(wf, null);
+				}
+				catch (RemoteException ex)
+				{
+					logger.log("Cannot submit workflow to remote worker.", ex);
+				}
 			}
 		}
 	}
@@ -146,7 +144,7 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public void setTaskStatus(TaskStatus status)  
 	{
-		Task.get(status.taskUUID).setStatus(status);
+		Task.get(status.taskID).setStatus(status);
 		
 		if(manager != null)
 		{
@@ -160,6 +158,28 @@ public class SiteManager extends WorkflowExecutor
 			}
 		}
 		
+		
+		if(status.status == TaskStatus.STATUS_COMPLETED)
+		{
+			//Upload output files
+			if(manager!=null)
+			{
+				for(String wff : Task.get(status.taskID).getOutputFiles())
+				{
+					FileManager.get().outputCreated(WorkflowFile.get(wff));
+				}
+			}
+			
+			
+			if(taskQueue.isEmpty())
+			{
+				logger.log("Task queue is empty.");
+			}
+			else
+			{
+				dispatchTask();
+			}
+		}
 	}
 
 	@Override
@@ -214,6 +234,41 @@ public class SiteManager extends WorkflowExecutor
 	{
 		return remoteWorkers.get(uri);
 	}
+	
+	@Override
+	public String getWorkingDir()
+	{
+		return Utils.getProp("working_dir");
+	}
+
+	
+	
+	
+	
+	
+	
+	@Override
+	public String getTaskQueueHTML()
+	{
+		return taskQueue.toHTML();
+	}
+
+	@Override
+	public Set<String> getWorkerSet()
+	{
+		return new HashSet<>(execNetwork.getExecutorURISet());
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	public static void main(String[] args)
 	{

@@ -38,11 +38,21 @@ public class Logger
     
     public void log(String msg)
     {
-        pw.print(new Date().toString());
-        pw.print(": ");
-        pw.println(msg);
-        pw.flush();
+        log(msg, true);
     }
+	
+	public void log(String msg, boolean time)
+	{
+		if(time)
+		{
+			pw.print(new Date().toString());
+			pw.print(": ");
+		}
+		pw.println(msg);
+		pw.flush();
+		
+		System.err.println(msg);
+	}
     
     public void log(String msg, Exception ex)
     {

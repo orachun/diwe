@@ -18,7 +18,7 @@ public class TaskStatus implements Serializable
     public static final char STATUS_COMPLETED = 'C';
     public static final char STATUS_FAIL = 'F';
 	
-	public String taskUUID;
+	public String taskID;
 	public char status;
 	public int retVal;
 	public String errMsg;
@@ -33,7 +33,7 @@ public class TaskStatus implements Serializable
 	}
 	public TaskStatus(String taskUUID, char status, int retVal, String errMsg)
 	{
-		this.taskUUID = taskUUID;
+		this.taskID = taskUUID;
 		this.status = status;
 		this.retVal = retVal;
 		this.errMsg = errMsg;
@@ -41,7 +41,7 @@ public class TaskStatus implements Serializable
 
 	public TaskStatus(String taskUUID, char status, int retVal, String errMsg, long start, long finish)
 	{
-		this.taskUUID = taskUUID;
+		this.taskID = taskUUID;
 		this.status = status;
 		this.retVal = retVal;
 		this.errMsg = errMsg;
@@ -61,19 +61,19 @@ public class TaskStatus implements Serializable
 	}
 	public static TaskStatus completedStatus(TaskStatus ts)
 	{
-		return new TaskStatus(ts.taskUUID, STATUS_COMPLETED, 0, "", ts.start, Utils.time());
+		return new TaskStatus(ts.taskID, STATUS_COMPLETED, 0, "", ts.start, Utils.time());
 	}
 	public static TaskStatus failedStatus(TaskStatus ts, int retVal, String errMsg)
 	{
-		return new TaskStatus(ts.taskUUID, STATUS_FAIL, retVal, errMsg, ts.start, Utils.time());
+		return new TaskStatus(ts.taskID, STATUS_FAIL, retVal, errMsg, ts.start, Utils.time());
 	}
 	
 	public TaskStatus complete()
 	{
-		return new TaskStatus(this.taskUUID, STATUS_COMPLETED, 0, "", this.start, Utils.time());
+		return new TaskStatus(this.taskID, STATUS_COMPLETED, 0, "", this.start, Utils.time());
 	}
 	public TaskStatus fail(int retVal, String errMsg)
 	{
-		return new TaskStatus(this.taskUUID, STATUS_FAIL, retVal, errMsg, this.start, Utils.time());
+		return new TaskStatus(this.taskID, STATUS_FAIL, retVal, errMsg, this.start, Utils.time());
 	}
 }

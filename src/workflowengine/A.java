@@ -4,16 +4,30 @@
  */
 package workflowengine;
 
-import java.util.Properties;
+import java.awt.Dimension;
+import java.io.IOException;
+import javax.swing.JEditorPane;
+import javax.swing.JFrame;
 
 /**
  *
  * @author orachun
  */
-public class A
+public class A extends JFrame
 {
+	public A()throws IOException
+	{
+		JEditorPane editor = new JEditorPane("http://www.google.com/");
+		//editor.setEditable(false);
+		editor.setPreferredSize(new Dimension(1024, 768));
+		
+		this.add(editor);
+		this.setDefaultCloseOperation(EXIT_ON_CLOSE);
+		this.setPreferredSize(new Dimension(1024, 768));
+		this.setVisible(true);
+	}
     public static void main(String[] args) throws Exception
     {
-        System.out.println(3.6%2);
+        new A();
     }
 }

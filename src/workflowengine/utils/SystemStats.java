@@ -5,6 +5,7 @@
 package workflowengine.utils;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 
 /**
@@ -60,10 +61,45 @@ public class SystemStats
         util = util.replaceAll("id.*", "").trim();
         return Double.parseDouble(util);
     }
-    public static int procCount()
+    public static int totalProcesses()
     {
         String count = exec("ps -e | wc -l");
         return Integer.parseInt(count);
     }
     
+	public static void printStat()
+	{
+		System.out.println(getStat());
+	}
+	
+	public static String getStat()
+	{
+		StringBuilder stat = new StringBuilder();
+		stat.append("Available processors (cores): ").append(Runtime.getRuntime().availableProcessors());
+
+		/* Total amount of free memory available to the JVM */
+		stat.append("\nFree memory (bytes): ").append(Runtime.getRuntime().freeMemory());
+
+		/* This will return Long.MAX_VALUE if there is no preset limit */
+		long maxMemory = Runtime.getRuntime().maxMemory();
+		/* Maximum amount of memory the JVM will attempt to use */
+		stat.append("\nMaximum memory (bytes): ").append(maxMemory == Long.MAX_VALUE ? "no limit" : maxMemory);
+
+		/* Total memory currently in use by the JVM */
+		stat.append("\nTotal memory (bytes): ").append(Runtime.getRuntime().totalMemory());
+
+		/* Get a list of all filesystem roots on this system */
+		File[] roots = File.listRoots();
+
+		/* For each filesystem root, print some info */
+		for (File root : roots)
+		{
+			stat.append("\nFile system root: ").append(root.getAbsolutePath());
+			stat.append("\nTotal space (bytes): ").append(root.getTotalSpace());
+			stat.append("\nFree space (bytes): ").append(root.getFreeSpace());
+			stat.append("\nUsable space (bytes): ").append(root.getUsableSpace());
+		}
+		
+		return stat.toString();
+	}
 }

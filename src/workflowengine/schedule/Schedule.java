@@ -6,6 +6,7 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
 import workflowengine.utils.db.Cacher;
+import workflowengine.utils.db.DBRecord;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
 
@@ -285,6 +286,27 @@ public class Schedule
         }
         return sb.toString();
     }
+	
+	private static String[] keys = new String[]{"tid", "wkid"};
+	public void save()
+	{
+		for(Map.Entry<String, String>  entry : mapping.entrySet())
+		{
+			String tid = entry.getKey();
+			String wkid = entry.getValue();
+			new DBRecord("schedule")
+					.set("tid", tid)
+					.set("wkid", wkid)
+//					.set("estimated_start", estimatedStart.get(tid))
+//					.set("estimated_finish", estimatedFinish.get(tid))
+					.upsert(keys);
+		}
+	}
+	
+	public String getWorkflowID()
+	{
+		return settings.getWorkflow().getUUID();
+	}
 }
 
 

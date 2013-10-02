@@ -13,7 +13,6 @@ import java.util.LinkedList;
 import java.util.Set;
 import workflowengine.schedule.Schedule;
 import workflowengine.workflow.Task;
-import workflowengine.workflow.WorkflowFile;
 
 /**
  *

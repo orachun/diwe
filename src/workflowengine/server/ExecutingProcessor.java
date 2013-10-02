@@ -2,16 +2,12 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.resource;
+package workflowengine.server;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
-import java.util.Set;
-import workflowengine.server.WorkflowExecutor;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
-import workflowengine.workflow.Workflow;
-import workflowengine.server.Worker;
 import workflowengine.utils.Utils;
 
 /**
@@ -35,7 +31,6 @@ public class ExecutingProcessor extends WorkflowExecutor
 			throw new IllegalStateException("Executing other process.");
 		}
 		TaskStatus ts = TaskStatus.executingStatus(t.getUUID());
-		manager.setTaskStatus(ts);
 		Process p;
 		try
 		{
@@ -44,11 +39,15 @@ public class ExecutingProcessor extends WorkflowExecutor
 		catch (IOException ex)
 		{
 			manager.setTaskStatus(ts.fail(-1, "Cannot start process: "+ex.getMessage()));
+			manager.logger.log("Cannot start proceess.", ex);
 			p = null;
 		}
+		manager.setTaskStatus(ts);
 		
 		if(p != null)
 		{
+			manager.logger.log("Task "+t.getName()+ " is started.");
+			manager.logger.log("CMD: "+t.getCmd());
 			try
 			{
 				int ret = p.waitFor();
@@ -57,17 +56,20 @@ public class ExecutingProcessor extends WorkflowExecutor
 				{
 					ts = ts.complete();
 					manager.setTaskStatus(ts);
+					manager.logger.log("Task "+t.getUUID()+ " is completed.");
 				}
 				else
 				{
 					ts = ts.fail(ret, "Unknown error: return value is not 0.");
 					manager.setTaskStatus(ts);
+					manager.logger.log("Task "+t.getUUID()+ " is failed: return value is not 0.");
 				}
 			}
 			catch (InterruptedException ex)
 			{
 				ts = ts.fail(-1, "Waiting is interrupted before process ends.");
 				manager.setTaskStatus(ts);
+				manager.logger.log("Task "+t.getUUID()+ " is failed: Waiting is interrupted before process ends.");
 			}
 		}
 		return ts;
@@ -81,15 +83,18 @@ public class ExecutingProcessor extends WorkflowExecutor
 	
 	private String[] prepareCmd(Task t)
     {
-        return t.getCmd().split(";");
+        String[] cmds = t.getCmd().split(";");
+		cmds[0] = Utils.getProp("working_dir")+"/"+cmds[0];
+		return cmds;
     }
 	
 	private Process startProcess(Task t) throws IOException
     {
-        ProcessBuilder pb = Utils.createProcessBuilder(prepareCmd(t),
+        ProcessBuilder pb = Utils.createProcessBuilder(
+				prepareCmd(t),
                 manager.getWorkingDir(),
-                manager.getWorkingDir() + t.getUUID() + ".stdout",
-                manager.getWorkingDir() + t.getUUID() + ".stderr", "");
+				manager.getWorkingDir() + "/" + t.getUUID() + ".stdout",
+				manager.getWorkingDir() + "/" + t.getUUID() + ".stderr", null);
         currentProcess = pb.start();
 		return currentProcess;
     }
@@ -98,109 +103,6 @@ public class ExecutingProcessor extends WorkflowExecutor
 	public void stop() throws RemoteException
 	{
 		currentProcess.destroy();
-	}
-
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-
-	@Override
-	public RemoteWorker getWorker(String uri)
-	{
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
-	}
-	
-	@Override
-	public void registerWorker(String uri, int totalProcessors)
-	{
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
-	}
-	
-	@Override
-	public Set<String> getExecutorURIs()
-	{
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
-	}
-
-	@Override
-	public void dispatchTask()
-	{
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
-	}
-
-	@Override
-	public void submit(Workflow wf)
-	{
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
-	}
-
-
-	@Override
-	public void setTaskStatus(TaskStatus status)
-	{
-		throw new UnsupportedOperationException("Not supported."); //To change body of generated methods, choose Tools | Templates.
 	}
 
 	

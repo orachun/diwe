@@ -4,6 +4,7 @@
  */
 package workflowengine.resource;
 
+import workflowengine.server.ExecutingProcessor;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.logging.Level;

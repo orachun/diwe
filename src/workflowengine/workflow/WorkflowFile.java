@@ -17,6 +17,7 @@ import workflowengine.utils.db.Savable;
 public class WorkflowFile implements Serializable, Savable
 {
     public static final char TYPE_FILE = 'F';
+    public static final char TYPE_EXEC = 'E';
     public static final char TYPE_CHECKPOINT_FILE = 'C';
 	
 	
@@ -80,12 +81,22 @@ public class WorkflowFile implements Serializable, Savable
     }
     
 	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	public static WorkflowFile get(String UUID)
 	{
 		return (WorkflowFile)Cacher.get(WorkflowFile.class, UUID);
 	}
 	
-    public static WorkflowFile getInstant(Object key)
+    public static WorkflowFile getInstance(Object key)
 	{
 		try
 		{
