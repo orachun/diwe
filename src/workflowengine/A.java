@@ -4,30 +4,21 @@
  */
 package workflowengine;
 
-import java.awt.Dimension;
-import java.io.IOException;
-import javax.swing.JEditorPane;
-import javax.swing.JFrame;
+import java.rmi.registry.LocateRegistry;
+import workflowengine.server.WorkflowExecutorInterface;
 
 /**
  *
  * @author orachun
  */
-public class A extends JFrame
+public class A
 {
-	public A()throws IOException
-	{
-		JEditorPane editor = new JEditorPane("http://www.google.com/");
-		//editor.setEditable(false);
-		editor.setPreferredSize(new Dimension(1024, 768));
-		
-		this.add(editor);
-		this.setDefaultCloseOperation(EXIT_ON_CLOSE);
-		this.setPreferredSize(new Dimension(1024, 768));
-		this.setVisible(true);
-	}
     public static void main(String[] args) throws Exception
     {
-        new A();
+        for(String s : LocateRegistry.getRegistry("10.217.168.205").list())
+		{
+			((WorkflowExecutorInterface)LocateRegistry.getRegistry("10.217.168.205").lookup(s)).greeting("hello");
+			System.out.println(s);
+		}
     }
 }

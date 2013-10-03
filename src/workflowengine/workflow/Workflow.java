@@ -463,7 +463,7 @@ public class Workflow implements Serializable, Savable
 	
     public static void main(String[] args) throws DBException, FileNotFoundException
     {
-        Workflow wf = WorkflowFactory.fromDummyDAX("/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml");
+        Workflow wf = WorkflowFactory.fromDummyDAX("/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml", "Inspiral_30");
 		Cacher.flushAll();
     }
 }

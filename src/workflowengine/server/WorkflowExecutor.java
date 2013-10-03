@@ -11,6 +11,7 @@ import java.net.MalformedURLException;
 import java.rmi.Naming;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
+import workflowengine.utils.db.Cacher;
 import workflowengine.utils.db.DBRecord;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.TaskStatus;
@@ -100,8 +102,10 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 		try
 		{
 			return (WorkflowExecutorInterface) Naming.lookup(weURI);
+//			String[] s = weURI.replace("//", "").split("/");
+//			return (WorkflowExecutorInterface) LocateRegistry.getRegistry(s[0]).lookup(s[1]);
 		}
-		catch (MalformedURLException | RemoteException e)
+		catch (MalformedURLException|RemoteException e)
 		{
 			throw new RuntimeException(e.getMessage(), e);
 		}
@@ -154,14 +158,15 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	public String getTaskMappingHTML() throws RemoteException
 	{
 		HashMap<String, String> mapping = new HashMap<>();
-		for(DBRecord r : DBRecord.selectAll("schedule"))
+		for(DBRecord r : DBRecord.select(
+				"select s.tid, s.wkid "
+				+ "from schedule s "
+				+ "join task t on s.tid = t.tid "
+				+ "order by t.status asc"))
 		{
 			mapping.put(r.get("tid"), r.get("wkid"));
 		}
-		for(DBRecord r : DBRecord.selectAll("schedule"))
-		{
-			mapping.put(r.get("tid"), r.get("wkid"));
-		}
+		
 		
 		StringBuilder mappingHTML = new StringBuilder();
 		for(Map.Entry<String, String> entry : mapping.entrySet())
@@ -229,9 +234,17 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 			FileWriter fw = new FileWriter(f);
 			fw.append(dax);
 			fw.close();
-			Workflow wf = WorkflowFactory.fromDummyDAX(f.getAbsolutePath());			
-			wf.isDummy = true;
-			wf.prepareRemoteSubmit();
+			Workflow wf;
+			String name = prop.getProperty("dax_file");
+			if(name.endsWith(".dummy"))
+			{
+				wf = WorkflowFactory.fromDummyDAX(f.getAbsolutePath(), name);			
+				wf.isDummy = true;
+			}
+			else
+			{
+				wf = WorkflowFactory.fromDAX(f.getAbsolutePath(), name);	
+			}
 			String input_dir = prop.getProperty("input_dir");
 			String workingDir = getWorkingDir()+"/"+wf.getSuperWfid();
 			Utils.mkdirs(workingDir);
@@ -279,6 +292,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 				}
 				catch (InterruptedException ex)
 				{}
+				Cacher.saveAll();
 				System.out.println("Done.");
 				System.exit(0);
 			}

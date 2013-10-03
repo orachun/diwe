@@ -27,11 +27,10 @@ public class WorkflowFactory
     public static final double AVG_WORKLOAD = 10;
     public static final double AVG_FILE_SIZE = 3 * Utils.MB;
 	
-	public static Workflow fromDAX(String filename) throws DBException
+	public static Workflow fromDAX(String filename, String name) throws DBException
     {
 		HashMap<String, WorkflowFile> files = new HashMap<>();
-        File f = new File(filename);
-        Workflow wf = new Workflow(f.getName(), Utils.uuid());
+        Workflow wf = new Workflow(name, Utils.uuid());
         try
         {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
@@ -63,8 +62,6 @@ public class WorkflowFactory
 					Task task = new Task(taskName, "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
 					
 					
-                    StringBuilder cmdBuilder = new StringBuilder();
-                    cmdBuilder.append("./dummy;").append(runtime).append(";");
                     tasks.put(id, task);
 
                     NodeList fileNodeList = jobElement.getElementsByTagName("uses");
@@ -83,27 +80,27 @@ public class WorkflowFactory
 						}
                         if (fiotype.equals("input"))
                         {
-                            cmdBuilder.append("i;");
                             task.addInputFile(wfile);
                         }
                         else
                         {
                             task.addOutputFile(wfile);
-                            cmdBuilder.append("o;");
                         }
-						cmdBuilder.append(fname).append(";");
-						cmdBuilder.append(fsize).append(";");
                     }
-                    cmdBuilder.deleteCharAt(cmdBuilder.length()-1);
                     String cmd = XMLUtils.argumentTagToCmd(jobElement);
-                    if(cmd == null)
-                    {
-                        task.setCmd(cmdBuilder.toString());
-                    }
-                    else
-                    {
-                        task.setCmd(cmd);
-                    }
+					
+					//Set executable file as input file
+					String execName = cmd.split(";")[0];
+					WorkflowFile execFile = files.get(execName);
+					if(execFile == null)
+					{
+						execFile = new WorkflowFile(execName, AVG_FILE_SIZE, 
+								WorkflowFile.TYPE_EXEC, Utils.uuid());
+						files.put(execName, execFile);
+					}
+					task.addInputFile(execFile);
+					
+					task.setCmd(cmd);
                 }
             }
             
@@ -142,11 +139,10 @@ public class WorkflowFactory
         return wf;
     }
 	
-    public static Workflow fromDummyDAX(String filename)
+    public static Workflow fromDummyDAX(String filename, String name)
     {
 		HashMap<String, WorkflowFile> files = new HashMap<>();
-        File f = new File(filename);
-        Workflow wf = new Workflow(f.getName(), Utils.uuid());
+        Workflow wf = new Workflow(name, Utils.uuid());
 		WorkflowFile dummyFile = new WorkflowFile("dummy", 0.0088, WorkflowFile.TYPE_EXEC, Utils.uuid());
         try
         {
