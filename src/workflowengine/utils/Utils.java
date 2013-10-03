@@ -88,8 +88,7 @@ public class Utils
             }
             catch (IOException ex)
             {
-                System.err.println("Cannot read the configuration file " + CONFIG_FILE + ".");
-                throw new RuntimeException("Cannot read the configuration file " + CONFIG_FILE + ".");
+                System.err.println("WARNING: Cannot read the configuration file " + CONFIG_FILE + ".");
             }
         }
     }
@@ -235,7 +234,7 @@ public class Utils
         }
     }
 
-    public static void createDir(String path)
+    public static void mkdirs(String path)
     {
         new File(path).mkdirs();
     }
@@ -544,6 +543,33 @@ public class Utils
 		catch (Exception e)
 		{
 			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * Copy file using bash cp command
+	 * @param src
+	 * @param dst 
+	 */
+	public static void cp(String src, String dst)
+	{
+		Utils.execAndWait(new String[]{
+			"bash", "-c",
+			"cp -r "+src+" "+dst
+		}, false);
+	}
+	
+	
+	public static void setPropFromArgs(String[] args)
+	{
+		Utils.initProp();
+		for(String a : args)
+		{
+			String[] p = a.split("=");
+			if(p.length == 2)
+			{
+				Utils.PROP.setProperty(p[0].trim(), p[1].trim());
+			}
 		}
 	}
 }

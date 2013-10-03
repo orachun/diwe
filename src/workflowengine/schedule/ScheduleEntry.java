@@ -4,19 +4,23 @@
  */
 package workflowengine.schedule;
 
+import java.io.Serializable;
+
 /**
  *
  * @author orachun
  */
-public class ScheduleEntry
+public class ScheduleEntry implements Serializable
 {
 	public final String taskUUID;
 	public final String target;
+	public final String wfDir;
 
-	public ScheduleEntry(String taskUUID, String target)
+	public ScheduleEntry(String taskUUID, String target, String wfDir)
 	{
 		this.taskUUID = taskUUID;
 		this.target = target;
+		this.wfDir = wfDir;
 	}
 	
 }

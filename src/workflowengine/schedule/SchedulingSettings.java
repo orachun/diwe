@@ -71,7 +71,7 @@ public class SchedulingSettings
         }
         taskSet = this.wf.getTaskSet();
 		
-		for(String uri : we.getExecutorURIs())
+		for(String uri : we.getWorkerSet())
 		{
 			siteMap.put(uri, new Site(uri, we.getWorker(uri).getTotalProcessors()));
 		}

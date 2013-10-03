@@ -16,7 +16,6 @@ import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
-import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 
 /**
@@ -44,6 +43,10 @@ public class TaskQueue implements Serializable
 		}
 	}
 	
+	/**
+	 * Poll only single ready task to be executed
+	 * @return 
+	 */
 	public ScheduleEntry poll()
 	{
 		String t = taskQueue.poll();
@@ -51,7 +54,9 @@ public class TaskQueue implements Serializable
 		{
 			return null;
 		}
-		return new ScheduleEntry(t, taskMap.remove(t)[WORKER_URI]);
+		String[] s = taskMap.remove(t);
+		String wfDir = Workflow.get(s[WORKFLOW_ID]).getSuperWfid();
+		return new ScheduleEntry(t, s[WORKER_URI], wfDir);
 	}
 	
 	public boolean isEmpty()

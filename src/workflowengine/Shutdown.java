@@ -4,8 +4,9 @@
  */
 package workflowengine;
 
-import workflowengine.communication.Communicator;
-import workflowengine.communication.message.Message;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import workflowengine.server.WorkflowExecutor;
 
 /**
  *
@@ -14,16 +15,8 @@ import workflowengine.communication.message.Message;
 public class Shutdown
 {
 
-    public static void main(String[] args)
+    public static void main(String[] args) throws NotBoundException, RemoteException
     {
-        try
-        {
-            Message msg = new Message(Message.TYPE_SHUTDOWN);
-            Communicator comm = new Communicator("Shutdown");
-            comm.sendMessage(args[0], Integer.parseInt(args[1]), msg);
-        }
-        catch (Exception ex)
-        {
-        }
+        WorkflowExecutor.getRemoteExecutor(args[0]).shutdown();
     }
 }

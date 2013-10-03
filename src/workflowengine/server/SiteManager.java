@@ -71,20 +71,18 @@ public class SiteManager extends WorkflowExecutor
 				wf.setSubmitted(Utils.time());
 				wf.save();
 				wf.finalizedRemoteSubmit();
-
+				Utils.mkdirs((thisSite.getWorkingDir()+"/"+wf.getSuperWfid()));
 				if(wf.isDummy)
 				{
-					wf.createDummyInputFiles(thisSite.getWorkingDir());
+					wf.createDummyInputFiles(thisSite.getWorkingDir()+"/"+wf.getSuperWfid());
 				}
-//				String workingDir = Utils.getProp("working_dir")+"/"+wf.getUUID();
-//				Utils.createDir(workingDir);
 
 				//Wait for all input file exists
 				logger.log("Waiting for all input files...");
 				for(String inputFileUUID : wf.getInputFiles())
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-					FileManager.get().waitForFile(wff);
+					FileManager.get().waitForFile(wff, wf.getSuperWfid());
 				}
 				logger.log("Done.", false);
 
@@ -106,11 +104,6 @@ public class SiteManager extends WorkflowExecutor
 		return totalProcessors;
 	}
 
-	@Override
-	public Set<String> getExecutorURIs()
-	{
-		return execNetwork.getExecutorURISet();
-	}
 
 	@Override
 	public void dispatchTask()
@@ -123,11 +116,6 @@ public class SiteManager extends WorkflowExecutor
 			for (final Workflow wf : entry.getValue())
 			{
 				logger.log("Dispatching subworkflow "+wf.getUUID()+ " to "+ workerURI);
-				for(String tid: wf.getTaskQueue())
-				{
-					logger.log("  "+Task.get(tid).getName());
-				}
-				logger.log("------------------------");
 				wf.prepareRemoteSubmit();
 				try
 				{
@@ -166,7 +154,7 @@ public class SiteManager extends WorkflowExecutor
 			{
 				for(String wff : Task.get(status.taskID).getOutputFiles())
 				{
-					FileManager.get().outputCreated(WorkflowFile.get(wff));
+					FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
 				}
 			}
 			
@@ -272,6 +260,7 @@ public class SiteManager extends WorkflowExecutor
 	
 	public static void main(String[] args)
 	{
+		Utils.setPropFromArgs(args);
 		SiteManager.start();
 		
 	}

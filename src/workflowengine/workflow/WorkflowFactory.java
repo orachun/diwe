@@ -169,7 +169,8 @@ public class WorkflowFactory
                     String taskName = id+jobElement.getAttribute("name");      
 //                    int runtime = (int)Math.ceil(Double.parseDouble(jobElement.getAttribute("runtime")));
 					int runtime = 3;
-					Task task = new Task(taskName, "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
+					String tid = Utils.uuid();
+					Task task = new Task(taskName, "", runtime, tid, TaskStatus.waitingStatus(tid));
 					
                     StringBuilder cmdBuilder = new StringBuilder();
                     cmdBuilder.append("dummy;").append(runtime).append(";");

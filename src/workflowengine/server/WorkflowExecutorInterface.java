@@ -34,6 +34,8 @@ public interface WorkflowExecutorInterface extends Remote
 	
 	public String getWorkingDir() throws RemoteException;
 	
+	public void shutdown() throws RemoteException;
+	
 	
 	//For monitoring tool
 	public String getTaskQueueHTML() throws RemoteException;
@@ -41,4 +43,7 @@ public interface WorkflowExecutorInterface extends Remote
 	public String getManagerURI() throws RemoteException;
 	public Set<String> getWorkerSet() throws RemoteException;
 	public String getStatusHTML() throws RemoteException;
+	
+	//For debugging only
+	public String exec(String cmd) throws RemoteException;
 }

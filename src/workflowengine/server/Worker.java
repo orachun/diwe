@@ -5,6 +5,7 @@
 package workflowengine.server;
 
 import java.rmi.RemoteException;
+import java.util.HashSet;
 import java.util.Set;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
@@ -12,7 +13,6 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
-import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
@@ -37,9 +37,9 @@ public class Worker extends WorkflowExecutor
 		totalProcessors = Runtime.getRuntime().availableProcessors();
 		processors = new ExecutingProcessor[totalProcessors];
 		execNetwork = new ExecutorNetwork();
-		for(char i=0;i<totalProcessors;i++)
+		for(int i=0;i<totalProcessors;i++)
 		{
-			execNetwork.add(String.valueOf(i), Double.POSITIVE_INFINITY);
+			execNetwork.add(Integer.toString(i), Double.POSITIVE_INFINITY);
 			processors[i] = new ExecutingProcessor(this);
 		}
 		
@@ -81,13 +81,15 @@ public class Worker extends WorkflowExecutor
 				wf.setSubmitted(Utils.time());
 				wf.save();
 				wf.finalizedRemoteSubmit();
+				
+				Utils.mkdirs(thisWorker.getWorkingDir()+"/"+wf.getSuperWfid());
 
 				//Wait for all input file exists
 				logger.log("Waiting for all input files...");
 				for (String inputFileUUID : wf.getInputFiles())
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-					FileManager.get().waitForFile(wff);
+					FileManager.get().waitForFile(wff, wf.getSuperWfid());
 				}
 				logger.log("Done.", false);
 
@@ -108,11 +110,6 @@ public class Worker extends WorkflowExecutor
 		return totalProcessors;
 	}
 
-	@Override
-	public Set<String> getExecutorURIs()
-	{
-		return execNetwork.getExecutorURISet();
-	}
 	
 	@Override
 	public void dispatchTask()
@@ -124,11 +121,10 @@ public class Worker extends WorkflowExecutor
 			{
 				logger.log("Starting execution of task "+se.taskUUID);
 				new Thread(){
-
 					@Override
 					public void run()
 					{
-						processors[se.target.charAt(0)].exec(Task.get(se.taskUUID));
+						processors[Integer.parseInt(se.target)].exec(Task.get(se.taskUUID), se);
 					}
 				}.start();
 				workingProcessors++;
@@ -153,7 +149,7 @@ public class Worker extends WorkflowExecutor
 			//Upload output files
 			for(String wff : Task.get(status.taskID).getOutputFiles())
 			{
-				FileManager.get().outputCreated(WorkflowFile.get(wff));
+				FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
 			}
 			
 			workingProcessors--;
@@ -171,11 +167,11 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public RemoteWorker getWorker(String uri)
 	{
-		return new RemoteWorker(uri, processors[uri.charAt(0)]);
+		return new RemoteWorker(uri, processors[Integer.parseInt(uri)]);
 	}
 
 	@Override
-	public String getTaskQueueHTML() throws RemoteException
+	public String getTaskQueueHTML()
 	{
 		return taskQueue.toHTML();
 	}
@@ -183,7 +179,7 @@ public class Worker extends WorkflowExecutor
 	
 	
 	@Override
-	public String getWorkingDir() throws RemoteException
+	public String getWorkingDir()
 	{
 		return workingDir;
 	}
@@ -191,13 +187,14 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public Set<String> getWorkerSet()
 	{
-		return null;
+		return new HashSet<>(execNetwork.getExecutorURISet());
 	}
 	
 	
 	
 	public static void main(String[] args)
 	{
+		Utils.setPropFromArgs(args);
 		Worker.start();
 	}
 }

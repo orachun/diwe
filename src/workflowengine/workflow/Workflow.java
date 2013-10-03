@@ -39,7 +39,8 @@ public class Workflow implements Serializable, Savable
     protected String name = "";
     protected Set<String> inputFiles = new HashSet<>(); //WorkflowFile
     protected Set<String> outputFiles = new HashSet<>(); //WorkflowFile
-
+	protected String superWfid = "";
+	
 	protected long submitted = -1;
 	protected long startTime = -1;
 	protected long scheduledTime = -1;
@@ -119,10 +120,6 @@ public class Workflow implements Serializable, Savable
         return new HashSet(inputFiles);
     }
 	
-    public String getWorkingDirSuffix()
-    {
-        return "wf_"+uuid+"/";
-    }
     
     
     /**
@@ -167,6 +164,7 @@ public class Workflow implements Serializable, Savable
 			}
 		}
 		w.finalizeWorkflow();
+		w.superWfid = this.getSuperWfid();
 		return w;
 	}
     
@@ -301,6 +299,23 @@ public class Workflow implements Serializable, Savable
 		return taskGraph.getLeaves();
 	}
 	
+	/**
+	 * Return the name of the working directory (not full path) for 
+	 * this workflow
+	 * @return 
+	 */
+	public String getSuperWfid()
+	{
+		return (superWfid.isEmpty() ? uuid : superWfid);
+	}
+	
+	
+	
+	
+	
+	
+	
+	
 	public static Workflow get(String uuid)
 	{
 		return (Workflow)Cacher.get(Workflow.class, uuid);
@@ -326,6 +341,7 @@ public class Workflow implements Serializable, Savable
 			{
 				wf.taskGraph.addNodes(r2.get("parent"), r2.get("child"));
 			}
+			wf.superWfid = r.get("superwfid");
 			return wf;
 		}
 		catch (IndexOutOfBoundsException e)
@@ -343,6 +359,7 @@ public class Workflow implements Serializable, Savable
 	{
 		new DBRecord("workflow")
 				.set("wfid", uuid)
+				.set("superwfid", superWfid)
 				.set("name", name)
 				.set("submitted", submitted)
 				.set("status", String.valueOf(status))

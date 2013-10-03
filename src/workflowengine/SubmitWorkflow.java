@@ -26,50 +26,40 @@ public class SubmitWorkflow
 {
     public static void usage()
     {
-        System.out.println("Usage: SubmitWorkflow DAX_FILE [option=value] ...");
+        System.out.println("Usage: SubmitWorkflow SUBMIT_FILE");
     }
     
     public static void main(String[] args) throws IOException
     {
         if(args.length < 1)
         {
-            System.err.println("Please specify DAG file.");
+            System.err.println("Please specify the submit file.");
             usage();
             System.exit(1);
         }
-        String daxFile = args[0];
+        String submitFile = args[0];
         
         Properties p = new Properties();
-        
-		if (args.length > 1)
-		{
-			if (args[1].contains("="))
-			{
-				for (int i = 1; i < args.length; i++)
-				{
-					String[] prop = args[i].split("=");
-					p.setProperty(prop[0].trim(), prop[1].trim());
-				}
-			}
-			else
-			{
-				p.load(new FileInputStream(args[2]));
-			}
-		}
-
+        p.load(new FileInputStream(submitFile));
 		Utils.setProp(p);
-		
-		daxFile = "/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml";
-		//daxFile = "/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Simple_5.xml";
-		String dax = Charset.forName("UTF-8").decode(ByteBuffer.wrap(Files.readAllBytes(Paths.get(daxFile)))).toString();
+		String dax = getFileContent(p.getProperty("dax_file"));
 		
 		try
 		{
-			WorkflowExecutor.getSiteManager().submit(dax, null);
+			WorkflowExecutor.getSiteManager().submit(dax, p);
 		}
 		catch (NotBoundException ex)
 		{
 			System.err.println("Site manager is not found.");
+			System.exit(1);
 		}
     }
+	
+	private static String getFileContent(String file) throws IOException
+	{
+		return Charset.forName("UTF-8")
+				.decode(ByteBuffer.wrap(
+					Files.readAllBytes(Paths.get(file))
+				)).toString();
+	}
 }

@@ -31,7 +31,6 @@ public class Task implements Serializable, Comparable<Task>, Savable
         this.cmd = cmd;
 		this.uuid = uuid;
 		this.status = status;
-		this.status.taskID = uuid;
 		Cacher.cache(uuid, this);
     }
 	

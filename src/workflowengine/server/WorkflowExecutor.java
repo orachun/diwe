@@ -88,11 +88,12 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 					}
 				}
 			}
+			System.out.println("Done.");
 		}
-		Utils.createDir(Utils.getProp("working_dir"));
+		Utils.mkdirs(Utils.getProp("working_dir"));
 	}
 
-
+	
 
 	public static WorkflowExecutorInterface getRemoteExecutor(String weURI) throws NotBoundException
 	{
@@ -228,9 +229,13 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 			FileWriter fw = new FileWriter(f);
 			fw.append(dax);
 			fw.close();
-			Workflow wf = WorkflowFactory.fromDummyDAX(f.getAbsolutePath());
+			Workflow wf = WorkflowFactory.fromDummyDAX(f.getAbsolutePath());			
 			wf.isDummy = true;
 			wf.prepareRemoteSubmit();
+			String input_dir = prop.getProperty("input_dir");
+			String workingDir = getWorkingDir()+"/"+wf.getSuperWfid();
+			Utils.mkdirs(workingDir);
+			Utils.cp(input_dir+"/*", workingDir);
 			submit(wf, prop);
 		}
 		catch (IOException ex)
@@ -239,39 +244,82 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 		}
 	}
 	
+	
+	
+	
+	
+	@Override
+	public void shutdown()
+	{
+		System.out.println("Shutting down...");
+		Set<String> workers = getWorkerSet();
+		if(workers != null)
+		{
+			for(String w : getWorkerSet())
+			{
+				try
+				{
+					getRemoteExecutor(w).shutdown();
+				}
+				catch (Exception ex)
+				{
+					logger.log("Cannot tell worker "+w+" to shutdown.", ex);
+				}
+			}
+		}
+		
+		new Thread(){
+
+			@Override
+			public void run()
+			{
+				try
+				{
+					Thread.sleep(5000);
+				}
+				catch (InterruptedException ex)
+				{}
+				System.out.println("Done.");
+				System.exit(0);
+			}
+		}.start();
+	}
+
+	
+	/**
+	 * For debugging only
+	 * @deprecated 
+	 * @param cmd
+	 * @return
+	 * @throws RemoteException 
+	 */
+	@Override
+	public String exec(String cmd) throws RemoteException
+	{
+		return Utils.execAndWait(new String[]{
+			"bash", "-c", cmd
+		}, true);
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	// <editor-fold defaultstate="collapsed" desc="Not implemented methods">
 
 	@Override
 	public Set<String> getWorkerSet()
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	public Set<String> getExecutorURIs()
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
-	
 	
 	
 	public void dispatchTask()
@@ -293,9 +341,6 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
-	
-	
-	
 	
 
 	@Override
@@ -324,7 +369,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	}
 
 
-	
+	// </editor-fold>
 
 	
 	

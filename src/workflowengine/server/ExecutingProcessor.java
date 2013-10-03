@@ -6,6 +6,7 @@ package workflowengine.server;
 
 import java.io.IOException;
 import java.rmi.RemoteException;
+import workflowengine.schedule.ScheduleEntry;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
 import workflowengine.utils.Utils;
@@ -24,17 +25,17 @@ public class ExecutingProcessor extends WorkflowExecutor
 		this.manager = manager;
 	}
 	
-	public TaskStatus exec(Task t)
+	public TaskStatus exec(Task t, ScheduleEntry se)
 	{
 		if(currentProcess != null)
 		{
 			throw new IllegalStateException("Executing other process.");
 		}
-		TaskStatus ts = TaskStatus.executingStatus(t.getUUID());
+		TaskStatus ts = TaskStatus.executingStatus(se);
 		Process p;
 		try
 		{
-			p = startProcess(t);
+			p = startProcess(t, se);
 		}
 		catch (IOException ex)
 		{
@@ -81,20 +82,21 @@ public class ExecutingProcessor extends WorkflowExecutor
 		return 1;
 	}
 	
-	private String[] prepareCmd(Task t)
+	private String[] prepareCmd(Task t, ScheduleEntry se)
     {
         String[] cmds = t.getCmd().split(";");
-		cmds[0] = Utils.getProp("working_dir")+"/"+cmds[0];
+		cmds[0] = manager.getWorkingDir()+"/"+se.wfDir+"/"+cmds[0];
 		return cmds;
     }
 	
-	private Process startProcess(Task t) throws IOException
+	private Process startProcess(Task t, ScheduleEntry se) throws IOException
     {
+		String dir = manager.getWorkingDir() + "/" + se.wfDir;
         ProcessBuilder pb = Utils.createProcessBuilder(
-				prepareCmd(t),
-                manager.getWorkingDir(),
-				manager.getWorkingDir() + "/" + t.getUUID() + ".stdout",
-				manager.getWorkingDir() + "/" + t.getUUID() + ".stderr", null);
+				prepareCmd(t, se),
+                dir,
+				dir + "/" + t.getUUID() + ".stdout",
+				dir + "/" + t.getUUID() + ".stderr", null);
         currentProcess = pb.start();
 		return currentProcess;
     }
