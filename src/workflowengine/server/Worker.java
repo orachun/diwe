@@ -31,7 +31,7 @@ public class Worker extends WorkflowExecutor
 	private String workingDir = "";
 	private int workingProcessors = 0;
 	
-	protected Worker()  throws RemoteException
+	protected Worker()   //throws RemoteException
 	{
 		super(true, "Worker@"+Utils.getProp("local_port"));
 		totalProcessors = Runtime.getRuntime().availableProcessors();
@@ -51,14 +51,15 @@ public class Worker extends WorkflowExecutor
 	{
 		if(instant == null)
 		{
-			try
-			{
 				instant = new Worker();
-			}
-			catch (RemoteException ex)
-			{
-				throw new RuntimeException(ex);
-			}
+//			try
+//			{
+//				instant = new Worker();
+//			}
+//			catch (RemoteException ex)
+//			{
+//				throw new RuntimeException(ex);
+//			}
 		}
 		return instant;
 	}
@@ -135,15 +136,17 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public void setTaskStatus(TaskStatus status)  
 	{
-		try
-		{
 			Task.get(status.taskID).setStatus(status);
 			manager.setTaskStatus(status);
-		}
-		catch (RemoteException ex)
-		{
-			logger.log("Cannot upload task status to manager.", ex);
-		}
+//		try
+//		{
+//			Task.get(status.taskID).setStatus(status);
+//			manager.setTaskStatus(status);
+//		}
+//		catch (RemoteException ex)
+//		{
+//			logger.log("Cannot upload task status to manager.", ex);
+//		}
 		if(status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			//Upload output files

@@ -136,6 +136,7 @@ public class WorkflowFactory
         }
         
         wf.finalizeWorkflow();
+        TaskRanker.rankTask(wf);
         return wf;
     }
 	
@@ -239,7 +240,8 @@ public class WorkflowFactory
         }
         
         wf.finalizeWorkflow();
-        
+        TaskRanker.rankTask(wf);
+		
         System.gc();
         return wf;
     }

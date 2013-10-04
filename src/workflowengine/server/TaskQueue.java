@@ -148,9 +148,9 @@ public class TaskQueue implements Serializable
 			String tid = entry.getKey();
 			String wkid = entry.getValue();
 			Task t = Task.get(tid);
-			mappingHTML.append("<div>[")
+			mappingHTML.append("<div class=\"task-queue-entry\">[[")
 					.append(t.getStatus().status)
-					.append("]")
+					.append("]]")
 					.append(t.getName())
 					.append(":")
 					.append(wkid)

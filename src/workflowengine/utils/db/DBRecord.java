@@ -13,8 +13,9 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.utils.Utils;
-import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -58,13 +59,20 @@ public class DBRecord
             {
                 try
                 {
-                    String url = "jdbc:mysql://" + Utils.getProp("DBHost") + ":" + Utils.getProp("DBPort") + "/" + Utils.getProp("DBName");
+                    String url = "jdbc:mysql://" + Utils.getProp("DBHost") + ":" + Utils.getProp("DBPort") + "/";
 //                    System.out.println(url);
                     Class.forName("com.mysql.jdbc.Driver");
                     con = DriverManager.getConnection(
                             url,
                             Utils.getProp("DBUser"),
                             Utils.getProp("DBPass"));
+					initDB();
+					url += Utils.getProp("DBName");
+                    con = DriverManager.getConnection(
+                            url,
+                            Utils.getProp("DBUser"),
+                            Utils.getProp("DBPass"));
+					
                 }
                 catch (ClassNotFoundException | SQLException ex)
                 {
@@ -346,6 +354,26 @@ public class DBRecord
         return select(table, query.toString());
     }
 
+	public static void exec(String sql)
+	{
+		synchronized (DB_LOCKER)
+        {
+            if (!Utils.isDBEnabled())
+            {
+                return ;
+            }
+            prepareConnection();
+            try
+            {
+                con.createStatement().execute(sql);
+            }
+            catch (SQLException ex)
+            {
+                throw new DBException(ex, sql);
+            }
+        }
+	}
+	
     public static List<DBRecord> select(String table, String sql)
     {
         synchronized (DB_LOCKER)
@@ -391,6 +419,188 @@ public class DBRecord
         return sb.toString();
     }
 
+	
+	private static void initDB()
+	{
+		
+		String dbname = Utils.getProp("DBName") + "_"
+				+ Utils.getProp("local_hostname") + "_"
+				+ Utils.getIntProp("local_port");
+		Utils.getPROP().setProperty("DBName", dbname);
+		System.out.println("Preparing db : "+dbname);
+		DBRecord.update("DROP DATABASE IF EXISTS `"+dbname+"`");
+		DBRecord.update("CREATE DATABASE IF NOT EXISTS `"+dbname+"`");
+		
+		String url = "jdbc:mysql://" 
+				+ Utils.getProp("DBHost") + ":" 
+				+ Utils.getProp("DBPort") + "/" 
+				+ Utils.getProp("DBName");
+		try
+		{
+			con = DriverManager.getConnection(
+					url,
+					Utils.getProp("DBUser"),
+					Utils.getProp("DBPass"));
+		}
+		catch (SQLException ex)
+		{
+			throw new DBException(ex, "");
+		}
+		
+		String sql = 
+			"CREATE TABLE IF NOT EXISTS `exec_site` (\n" +
+			"  `uri` varchar(40) NOT NULL,\n" +
+			"  `total_processors` int(10) NOT NULL,\n" +
+			"  PRIMARY KEY (`uri`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `exec_site_checkpoint` (\n" +
+			"  `escid` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `esid` int(11) NOT NULL,\n" +
+			"  `tid` int(11) NOT NULL,\n" +
+			"  `path` varchar(255) COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `checkpointed_at` int(11) NOT NULL,\n" +
+			"  PRIMARY KEY (`escid`)\n" +
+			") ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci AUTO_INCREMENT=1 ;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `exec_site_file` (\n" +
+			"  `es_uri` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `fid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  PRIMARY KEY (`es_uri`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `file` (\n" +
+			"  `fid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `estsize` double NOT NULL DEFAULT '0',\n" +
+			"  `file_type` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  PRIMARY KEY (`fid`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `schedule` (\n" +
+			"  `sid` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `tid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `wkid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `estimated_start` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `estimated_finish` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  PRIMARY KEY (`sid`)\n" +
+			") ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=38 ;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `task` (\n" +
+			"  `tid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL DEFAULT '',\n" +
+			"  `cmd` text CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `status` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL COMMENT '''W''aiting, ''E''xecuting, ''C''ompleted, ''S''uspended, ''F''ail',\n" +
+			"  `estopr` int(11) NOT NULL COMMENT 'Estimated number of atomic operations',\n" +
+			"  `start` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `finish` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `exit_value` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `priority` double NOT NULL DEFAULT '-1',\n" +
+			"  PRIMARY KEY (`tid`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `task_exec_time` (\n" +
+			"  `tetid` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `wfname` varchar(255) COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `tname` varchar(255) COLLATE utf8_unicode_ci DEFAULT '',\n" +
+			"  `exec_time` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  PRIMARY KEY (`tetid`),\n" +
+			"  KEY `wfname` (`wfname`)\n" +
+			") ENGINE=MyISAM DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci AUTO_INCREMENT=1 ;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `worker` (\n" +
+			"  `wkid` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `esid` int(11) DEFAULT '0',\n" +
+			"  `hostname` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `port` int(6) NOT NULL DEFAULT '-1',\n" +
+			"  `cpu` float DEFAULT '0',\n" +
+			"  `total_memory` float DEFAULT '0',\n" +
+			"  `free_memory` float DEFAULT '0',\n" +
+			"  `total_space` float DEFAULT '0',\n" +
+			"  `free_space` float DEFAULT '0',\n" +
+			"  `updated` int(11) DEFAULT '0',\n" +
+			"  `unit_cost` int(11) DEFAULT '0',\n" +
+			"  `current_tid` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `uuid` char(36) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL DEFAULT '',\n" +
+			"  `esp_hostname` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL DEFAULT '',\n" +
+			"  `esp_port` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `total_usage` int(11) NOT NULL DEFAULT '0',\n" +
+			"  PRIMARY KEY (`wkid`),\n" +
+			"  UNIQUE KEY `uuid` (`uuid`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1 ;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `workflow` (\n" +
+			"  `wfid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `superwfid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL DEFAULT '',\n" +
+			"  `name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `submitted` int(11) NOT NULL,\n" +
+			"  `status` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `started_at` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `scheduled_at` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `finished_at` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `est_finish` int(11) NOT NULL DEFAULT '-1',\n" +
+			"  `cumulated_time` int(11) NOT NULL DEFAULT '0',\n" +
+			"  PRIMARY KEY (`wfid`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `workflow_task` (\n" +
+			"  `tid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `wfid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  PRIMARY KEY (`tid`,`wfid`)\n" +
+			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `workflow_task_depen` (\n" +
+			"  `wtdid` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `parent` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `child` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `wfid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  PRIMARY KEY (`wtdid`)\n" +
+			") ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=7 ;\n" +
+			"\n";
+		DBRecord.update(sql);
+		sql = 
+			"CREATE TABLE IF NOT EXISTS `workflow_task_file` (\n" +
+			"  `wtfid` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `type` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `tid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `fid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  PRIMARY KEY (`wtfid`)\n" +
+			") ENGINE=InnoDB  DEFAULT CHARSET=utf8 AUTO_INCREMENT=481 ;";
+		DBRecord.update(sql);
+//		DBRecord.update("TRUNCATE `exec_site`;\n");
+//		DBRecord.update("TRUNCATE `exec_site_checkpoint`;\n");
+//		DBRecord.update("TRUNCATE `exec_site_file`;\n");
+//		DBRecord.update("TRUNCATE `file`;\n");
+//		DBRecord.update("TRUNCATE `schedule`;\n");
+//		DBRecord.update("TRUNCATE `task`;\n");
+//		DBRecord.update("TRUNCATE `task_exec_time`;\n");
+//		DBRecord.update("TRUNCATE `worker`;\n");
+//		DBRecord.update("TRUNCATE `workflow`;\n");
+//		DBRecord.update("TRUNCATE `workflow_task`;\n");
+//		DBRecord.update("TRUNCATE `workflow_task_depen`;\n" );
+//		DBRecord.update("TRUNCATE `workflow_task_file`;");
+	}
+	
     public static void main(String[] args)
     {
     }

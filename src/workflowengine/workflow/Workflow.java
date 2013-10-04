@@ -309,7 +309,22 @@ public class Workflow implements Serializable, Savable
 		return (superWfid.isEmpty() ? uuid : superWfid);
 	}
 	
-	
+	public boolean checkIfFinished()
+	{
+		if(isFinished)
+		{
+			return true;
+		}
+		for(String t : getEndTasks())
+		{
+			if(Task.get(t).getStatus().status != TaskStatus.STATUS_COMPLETED)
+			{
+				return false;
+			}
+		}
+		isFinished = true;
+		return true;
+	}
 	
 	
 	

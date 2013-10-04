@@ -7,16 +7,19 @@ package workflowengine.server;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.rmi.Naming;
+import java.net.Socket;
 import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.server.UnicastRemoteObject;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import lipermi.exception.LipeRMIException;
+import lipermi.handler.CallHandler;
+import lipermi.handler.filter.GZipFilter;
+import lipermi.net.Client;
+import lipermi.net.IClientListener;
+import lipermi.net.IServerListener;
+import lipermi.net.Server;
 import workflowengine.communication.HostAddress;
 import workflowengine.monitor.HTMLUtils;
 import workflowengine.resource.RemoteWorker;
@@ -29,6 +32,7 @@ import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
 import workflowengine.utils.db.DBRecord;
 import workflowengine.workflow.Task;
+import workflowengine.workflow.TaskRanker;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFactory;
@@ -37,7 +41,7 @@ import workflowengine.workflow.WorkflowFactory;
  *
  * @author orachun
  */
-public abstract class WorkflowExecutor extends UnicastRemoteObject implements WorkflowExecutorInterface
+public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 {
 	protected WorkflowExecutorInterface manager;
 	protected String managerURI;
@@ -46,35 +50,61 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	protected Logger logger = Utils.getLogger();
 	protected int totalProcessors = 0;
 //	protected Set<String> notFinishedWorkflows = new HashSet<>();
-	protected WorkflowExecutor() throws RemoteException
+	protected WorkflowExecutor()  //throws RemoteException
 	{
 		uri = "";
 		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
 		
 	}
 
-	protected WorkflowExecutor(boolean registerForRMI, String name) throws RemoteException
+	private CallHandler callHandler = new CallHandler();
+	protected WorkflowExecutor(boolean registerForRMI, String name)  //throws RemoteException
 	{
-		this.uri = "//" + Utils.getProp("local_hostname") + "/" + name;
+//		this.uri = "//" + Utils.getProp("local_hostname") + "/" + name;
+		this.uri = Utils.getProp("local_hostname")+":"+Utils.getIntProp("local_port");
+		DBRecord.prepareConnection();
 		if (registerForRMI)
 		{
-			try
-			{
-				System.out.println("Binding workflow executor to URI: " + uri);
-				Naming.rebind(name, this);
+//			try
+//			{
+//				System.out.println("Binding workflow executor to URI: " + uri);
+//				Naming.rebind(name, this);
+//			}
+//			catch (MalformedURLException e)
+//			{
+//				throw new RuntimeException(e.getMessage(), e);
+//			}
+//
+			
+			Server server = new Server();
+			try {
+				System.out.println("Registrating implementation");
+				callHandler.registerGlobal(WorkflowExecutorInterface.class, this);
+				System.out.println("Binding");
+				server.addServerListener(new IServerListener() {
+					public void clientConnected(Socket socket) {
+						System.out.println("Client connected: " + socket.getInetAddress());
+						
+					}
+					public void clientDisconnected(Socket socket) {
+						System.out.println("Client disconnected: " + socket.getInetAddress());
+					}
+				});
+				server.bind(Utils.getIntProp("local_port"), callHandler, new GZipFilter());
+				System.out.println("Server listening");
+			} catch (	LipeRMIException | IOException e) {
+				e.printStackTrace();
 			}
-			catch (MalformedURLException e)
-			{
-				throw new RuntimeException(e.getMessage(), e);
-			}
-
+			
+			
 			if (Utils.hasProp("manager_host")
 					&& !Utils.getProp("manager_host").isEmpty()
 					&& Utils.hasProp("manager_port")
 					&& !Utils.getProp("manager_port").isEmpty())
 			{
-				managerURI = "//" + Utils.getProp("manager_host") 
-						+ "/SiteManager@" + Utils.getProp("manager_port");
+//				managerURI = "//" + Utils.getProp("manager_host") 
+//						+ "/SiteManager@" + Utils.getProp("manager_port");
+				managerURI = Utils.getProp("manager_host")+":"+Utils.getProp("manager_port");
 				while (manager == null)
 				{
 					try
@@ -96,23 +126,53 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	}
 
 	
-
+	private static GZipFilter gzipfilter = new GZipFilter();
+	private static HashMap<String, Client> clients = new HashMap<>();
+	private static Client getRMIClient(final String uri)
+	{
+		Client c = clients.get(uri);
+		if(c == null)
+		{
+			String[] s = uri.split(":");
+			try
+			{
+				c = new Client(s[0], Integer.parseInt(s[1]), new CallHandler(), gzipfilter);
+				clients.put(uri, c);
+			}
+			catch (IOException ex)
+			{
+				throw new RuntimeException(ex.getMessage());
+			}
+			c.addClientListener(new IClientListener() {
+				@Override
+				public void disconnected()
+				{
+					clients.remove(uri);
+				}
+			});
+		}
+		
+		return c;
+	}
 	public static WorkflowExecutorInterface getRemoteExecutor(String weURI) throws NotBoundException
 	{
-		try
-		{
-			return (WorkflowExecutorInterface) Naming.lookup(weURI);
-//			String[] s = weURI.replace("//", "").split("/");
-//			return (WorkflowExecutorInterface) LocateRegistry.getRegistry(s[0]).lookup(s[1]);
-		}
-		catch (MalformedURLException|RemoteException e)
-		{
-			throw new RuntimeException(e.getMessage(), e);
-		}
+//		try
+//		{
+//			return (WorkflowExecutorInterface) Naming.lookup(weURI);
+////			String[] s = weURI.replace("//", "").split("/");
+////			return (WorkflowExecutorInterface) LocateRegistry.getRegistry(s[0]).lookup(s[1]);
+//		}
+//		catch (MalformedURLException|RemoteException e)
+//		{
+//			throw new RuntimeException(e.getMessage(), e);
+//		}
+		Client c = getRMIClient(weURI);
+		return (WorkflowExecutorInterface) c.getGlobal(WorkflowExecutorInterface.class);
 	}
 	public static WorkflowExecutorInterface getSiteManager() throws NotBoundException
 	{
-		return getRemoteExecutor("//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port"));
+//		return getRemoteExecutor("//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port"));
+		return getRemoteExecutor(Utils.getProp("manager_host")+":"+Utils.getIntProp("manager_port"));
 	}
 
 	protected Scheduler getScheduler()
@@ -155,18 +215,14 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 
 
 	@Override
-	public String getTaskMappingHTML() throws RemoteException
+	public String getTaskMappingHTML()  //throws RemoteException
 	{
 		HashMap<String, String> mapping = new HashMap<>();
 		for(DBRecord r : DBRecord.select(
-				"select s.tid, s.wkid "
-				+ "from schedule s "
-				+ "join task t on s.tid = t.tid "
-				+ "order by t.status asc"))
+				"select tid, wkid from schedule "))
 		{
 			mapping.put(r.get("tid"), r.get("wkid"));
 		}
-		
 		
 		StringBuilder mappingHTML = new StringBuilder();
 		for(Map.Entry<String, String> entry : mapping.entrySet())
@@ -174,19 +230,38 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 			String tid = entry.getKey();
 			String wkid = entry.getValue();
 			Task t = Task.get(tid);
-			mappingHTML.append("<div>[")
+			if(t.getStatus().status == TaskStatus.STATUS_COMPLETED)
+			{
+				mappingHTML.append("<div class=\"task-mapping-entry\">[")
 					.append(t.getStatus().status)
 					.append("]")
 					.append(t.getName())
 					.append(":")
 					.append(wkid)
 					.append("</div>");
+			}
+		}
+		for(Map.Entry<String, String> entry : mapping.entrySet())
+		{
+			String tid = entry.getKey();
+			String wkid = entry.getValue();
+			Task t = Task.get(tid);
+			if(t.getStatus().status != TaskStatus.STATUS_COMPLETED)
+			{
+				mappingHTML.append("<div class=\"task-status-entry\">[[")
+					.append(t.getStatus().status)
+					.append("]]")
+					.append(t.getName())
+					.append(":")
+					.append(wkid)
+					.append("</div>");
+			}
 		}
 		return mappingHTML.toString();
 	}
 	
 	@Override
-	public String getStatusHTML() throws RemoteException
+	public String getStatusHTML()  //throws RemoteException
 	{
 		StringBuilder sb = new StringBuilder();
 		sb.append("<h1>System Status</h1>").append(HTMLUtils.nl2br(SystemStats.getStat()));
@@ -214,7 +289,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	}
 
 	@Override
-	public String getManagerURI() throws RemoteException
+	public String getManagerURI()  //throws RemoteException
 	{
 		return managerURI;
 	}
@@ -226,7 +301,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	}
 
 	@Override
-	public void submit(String dax, Properties prop) throws RemoteException
+	public void submit(String dax, Properties prop)  //throws RemoteException
 	{
 		try
 		{
@@ -253,7 +328,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 		}
 		catch (IOException ex)
 		{
-			throw new RemoteException(ex.getMessage(), ex);
+//			throw new RemoteException(ex.getMessage(), ex);
 		}
 	}
 	
@@ -288,7 +363,7 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 			{
 				try
 				{
-					Thread.sleep(5000);
+					Thread.sleep(1000);
 				}
 				catch (InterruptedException ex)
 				{}
@@ -305,10 +380,10 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	 * @deprecated 
 	 * @param cmd
 	 * @return
-	 * @throws RemoteException 
+	 * @ //throws RemoteException 
 	 */
 	@Override
-	public String exec(String cmd) throws RemoteException
+	public String exec(String cmd)  //throws RemoteException
 	{
 		return Utils.execAndWait(new String[]{
 			"bash", "-c", cmd
@@ -351,33 +426,33 @@ public abstract class WorkflowExecutor extends UnicastRemoteObject implements Wo
 	
 	
 	@Override
-	public String getTaskQueueHTML() throws RemoteException
+	public String getTaskQueueHTML()  //throws RemoteException
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 	
 
 	@Override
-	public int getTotalProcessors() throws RemoteException
+	public int getTotalProcessors()  //throws RemoteException
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
 
 	@Override
-	public void registerWorker(String uri, int totalProcessors) throws RemoteException
+	public void registerWorker(String uri, int totalProcessors)  //throws RemoteException
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
 	@Override
-	public void stop() throws RemoteException
+	public void stop()  //throws RemoteException
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
 	@Override
-	public String getWorkingDir() throws RemoteException
+	public String getWorkingDir()  //throws RemoteException
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}

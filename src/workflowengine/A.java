@@ -13,12 +13,12 @@ import workflowengine.server.WorkflowExecutorInterface;
  */
 public class A
 {
+	public int a(int b, String c)
+	{
+		return 0;
+	}
     public static void main(String[] args) throws Exception
     {
-        for(String s : LocateRegistry.getRegistry("10.217.168.205").list())
-		{
-			((WorkflowExecutorInterface)LocateRegistry.getRegistry("10.217.168.205").lookup(s)).greeting("hello");
-			System.out.println(s);
-		}
+        System.out.println(A.class.getMethod("a", Integer.TYPE, String.class).toString());
     }
 }

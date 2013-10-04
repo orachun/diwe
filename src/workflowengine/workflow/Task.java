@@ -23,6 +23,8 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	private TaskStatus status;
     private Set<String> inputs = new HashSet<>(); //WorkflowFile
     private Set<String> outputs = new HashSet<>(); //WorkflowFile
+	private double priority = -1;
+
 
     public Task(String name, String cmd, double estimateExecTime, String uuid, TaskStatus status)
     {
@@ -157,6 +159,18 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	}
 	
 	
+	public double getPriority()
+	{
+		return priority;
+	}
+
+	public void setPriority(double p)
+	{
+		this.priority = p;
+	}
+
+	
+	
 	public static Task get(String taskUUID)
 	{
 		return (Task)Cacher.get(Task.class, taskUUID);
@@ -181,6 +195,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
 					record.getDouble("estopr"),
 					record.get("tid"),
 					s);
+			t.setPriority(record.getDouble("priority"));
 			List<DBRecord> files = DBRecord.select("workflow_task_file",
 					new DBRecord().set("tid", t.uuid));
 			for (DBRecord r : files)
@@ -214,6 +229,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
 				.set("start", status.start)
 				.set("finish", status.finish)
 				.set("exit_value", status.retVal)
+				.set("priority", priority)
 				.upsert(taskKeys);
 		
 		new DBRecord("workflow_task_file")

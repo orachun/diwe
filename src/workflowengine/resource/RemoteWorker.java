@@ -6,9 +6,6 @@ package workflowengine.resource;
 
 import workflowengine.server.ExecutingProcessor;
 import java.rmi.NotBoundException;
-import java.rmi.RemoteException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.server.WorkflowExecutorInterface;
 
@@ -22,19 +19,22 @@ public class RemoteWorker
 	private WorkflowExecutorInterface worker;
 	private int totalProcessors;
 	
-	public RemoteWorker(String URI) throws NotBoundException
+	public RemoteWorker(String URI, int processors) throws NotBoundException
 	{
 		this.URI = URI;
+		totalProcessors = processors;
 		this.worker = WorkflowExecutor.getRemoteExecutor(URI);
-		try
-		{
-			totalProcessors = worker.getTotalProcessors();
-		}
-		catch (RemoteException ex)
-		{
-			Logger.getLogger(RemoteWorker.class.getName()).log(Level.SEVERE, null, ex);
-		}
+//		try
+//		{
+//			totalProcessors = worker.getTotalProcessors();
+//		}
+//		catch (RemoteException ex)
+//		{
+//			Logger.getLogger(RemoteWorker.class.getName()).log(Level.SEVERE, null, ex);
+//		}
 	}
+	
+	
 	
 	public RemoteWorker(String URI, ExecutingProcessor p)
 	{

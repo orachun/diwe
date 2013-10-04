@@ -117,14 +117,15 @@ public class SiteManager extends WorkflowExecutor
 			{
 				logger.log("Dispatching subworkflow "+wf.getUUID()+ " to "+ workerURI);
 				wf.prepareRemoteSubmit();
-				try
-				{
 					we.submit(wf, null);
-				}
-				catch (RemoteException ex)
-				{
-					logger.log("Cannot submit workflow to remote worker.", ex);
-				}
+//				try
+//				{
+//					we.submit(wf, null);
+//				}
+//				catch (RemoteException ex)
+//				{
+//					logger.log("Cannot submit workflow to remote worker.", ex);
+//				}
 			}
 		}
 	}
@@ -136,14 +137,15 @@ public class SiteManager extends WorkflowExecutor
 		
 		if(manager != null)
 		{
-			try
-			{
 				manager.setTaskStatus(status);
-			}
-			catch (RemoteException ex)
-			{
-				logger.log("Cannot upload task status to manager.", ex);
-			}
+//			try
+//			{
+//				manager.setTaskStatus(status);
+//			}
+//			catch (RemoteException ex)
+//			{
+//				logger.log("Cannot upload task status to manager.", ex);
+//			}
 		}
 		
 		
@@ -157,6 +159,7 @@ public class SiteManager extends WorkflowExecutor
 					FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
 				}
 			}
+			
 			
 			
 			if(taskQueue.isEmpty())
@@ -180,13 +183,13 @@ public class SiteManager extends WorkflowExecutor
 		{
 			try
 			{
-				rw = new RemoteWorker(uri);
+				rw = new RemoteWorker(uri, totalProcessors);
 			}
 			catch (NotBoundException ex)
 			{
 				try
 				{
-					Thread.currentThread().wait(5000);
+					Thread.currentThread().sleep(5000);
 				}
 				catch (InterruptedException ex1)
 				{
@@ -197,24 +200,24 @@ public class SiteManager extends WorkflowExecutor
 		}
 		if(manager != null)
 		{
-			try
-			{
 				manager.registerWorker(this.getURI(), this.totalProcessors);
-			}
-			catch (RemoteException ex)
-			{
-				logger.log("Cannot update total processors to manager.", ex);
-			}
+//			try
+//			{
+//			}
+//			catch (RemoteException ex)
+//			{
+//				logger.log("Cannot update total processors to manager.", ex);
+//			}
 		}
 		remoteWorkers.put(uri, rw);
-		try
-		{
 			rw.getWorker().greeting("Hello from "+this.getURI());
-		}
-		catch (RemoteException ex)
-		{
-			logger.log("Cannot send hello msg to worker.", ex);
-		}
+//		try
+//		{
+//		}
+//		catch (RemoteException ex)
+//		{
+//			logger.log("Cannot send hello msg to worker.", ex);
+//		}
 	}
 	
 	@Override
@@ -262,6 +265,5 @@ public class SiteManager extends WorkflowExecutor
 	{
 		Utils.setPropFromArgs(args);
 		SiteManager.start();
-		
 	}
 }

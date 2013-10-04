@@ -19,7 +19,7 @@ public class ExecutingProcessor extends WorkflowExecutor
 {
 	private Worker manager;
 	private Process currentProcess;
-	public ExecutingProcessor(Worker manager) throws RemoteException
+	public ExecutingProcessor(Worker manager)  //throws RemoteException
 	{
 		super();
 		this.manager = manager;
@@ -102,7 +102,7 @@ public class ExecutingProcessor extends WorkflowExecutor
     }
 
 	@Override
-	public void stop() throws RemoteException
+	public void stop()  //throws RemoteException
 	{
 		currentProcess.destroy();
 	}
