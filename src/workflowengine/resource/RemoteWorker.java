@@ -5,7 +5,6 @@
 package workflowengine.resource;
 
 import workflowengine.server.ExecutingProcessor;
-import java.rmi.NotBoundException;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.server.WorkflowExecutorInterface;
 
@@ -19,7 +18,7 @@ public class RemoteWorker
 	private WorkflowExecutorInterface worker;
 	private int totalProcessors;
 	
-	public RemoteWorker(String URI, int processors) throws NotBoundException
+	public RemoteWorker(String URI, int processors)
 	{
 		this.URI = URI;
 		totalProcessors = processors;
@@ -39,8 +38,26 @@ public class RemoteWorker
 	public RemoteWorker(String URI, ExecutingProcessor p)
 	{
 		this.URI = URI;
-		this.worker = p;
+		this.worker = new ProcessorWrapper(p);
 	}
+	
+	private static class ProcessorWrapper extends WorkflowExecutor
+	{
+		private ExecutingProcessor p;
+
+		public ProcessorWrapper(ExecutingProcessor p)
+		{
+			this.p = p;
+		}
+
+		@Override
+		public int getTotalProcessors()
+		{
+			return p.getTotalProcessors();
+		}
+		
+	}
+	
 
 	public String getURI()
 	{
@@ -57,5 +74,9 @@ public class RemoteWorker
 		return totalProcessors;
 	}
 	
+	public void setTotalProcessors(int p)
+	{
+		this.totalProcessors = p;
+	}
 	
 }

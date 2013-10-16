@@ -479,7 +479,9 @@ public class DBRecord
 			"  `fid` varchar(40) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
 			"  `name` varchar(255) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
 			"  `estsize` double NOT NULL DEFAULT '0',\n" +
+			"  `priority` double NOT NULL DEFAULT '0',\n" +
 			"  `file_type` char(1) CHARACTER SET utf8 COLLATE utf8_unicode_ci NOT NULL,\n" +
+			"  `real_size` bigint(20) NOT NULL DEFAULT '-1',\n" +
 			"  PRIMARY KEY (`fid`)\n" +
 			") ENGINE=InnoDB DEFAULT CHARSET=utf8;\n" +
 			"\n";

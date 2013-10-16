@@ -5,7 +5,6 @@
 package workflowengine.server;
 
 import java.rmi.Remote;
-import java.rmi.RemoteException;
 import java.util.Set;
 import workflowengine.communication.HostAddress;
 import workflowengine.workflow.TaskStatus;
@@ -36,6 +35,8 @@ public interface WorkflowExecutorInterface extends Remote
 	
 	public void shutdown() ; //throws RemoteException;
 	
+	
+	public double getAvgBandwidth();
 	
 	//For monitoring tool
 	public String getTaskQueueHTML() ; //throws RemoteException;

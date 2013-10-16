@@ -20,14 +20,14 @@ public class WorkflowFile implements Serializable, Savable
     public static final char TYPE_EXEC = 'E';
     public static final char TYPE_CHECKPOINT_FILE = 'C';
 	
-	
-    private double size = 0;//MB
+	private double priority = 0;
+    private double sizeInBytes = 0;//Bytes
     private String name = "";
     private String uuid;
     private char type;
-	public WorkflowFile(String name, double size, char type, String uuid)
+	public WorkflowFile(String name, double sizeInBytes, char type, String uuid)
 	{
-		this.size = size;
+		this.sizeInBytes = sizeInBytes;
         this.name = name.trim();
         this.type = type;
 		this.uuid = uuid;
@@ -41,12 +41,21 @@ public class WorkflowFile implements Serializable, Savable
     
     public double getSize()
     {
-        return size;
+        return sizeInBytes;
     }
+	
+	public void setSize(double s)
+	{
+		sizeInBytes = s;
+	}
 
     public String getName()
     {
         return name;
+    }
+    public String getName(String wfid)
+    {
+        return wfid+"/"+name;
     }
 
 	public String getUUID()
@@ -54,11 +63,21 @@ public class WorkflowFile implements Serializable, Savable
 		return uuid;
 	}
 
+	public double getPriority()
+	{
+		return priority;
+	}
+
+	public void setPriority(double priority)
+	{
+		this.priority = priority;
+	}
+
 
     @Override
     public String toString()
     {
-        return "["+type+"]"+name+"("+uuid+"):"+size+"MB";
+        return "["+type+"]"+name+"("+uuid+"):"+sizeInBytes+"Bytes";
     }
 
     @Override
@@ -121,7 +140,7 @@ public class WorkflowFile implements Serializable, Savable
 		new DBRecord("file")
 				.set("fid", uuid)
 				.set("name", name)
-				.set("estsize", size)
+				.set("estsize", sizeInBytes)
 				.set("file_type", String.valueOf(type))
 				.upsert(fileKeys);
 	}

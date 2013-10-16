@@ -182,7 +182,8 @@ public class WorkflowFactory
                         String fiotype = fileElement.getAttribute("link");
                         char ftype = WorkflowFile.TYPE_FILE;
 
-                        double fsize = 1+Math.round(Double.parseDouble(fileElement.getAttribute("size"))*Utils.BYTE);
+                        double fsize = 1+Math.round(
+								Double.parseDouble(fileElement.getAttribute("size")));
 						
 						WorkflowFile wfile = files.get(fname);
 						if(wfile == null)

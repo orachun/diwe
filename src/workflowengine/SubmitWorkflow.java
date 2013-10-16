@@ -48,7 +48,7 @@ public class SubmitWorkflow
 		{
 			WorkflowExecutor.getSiteManager().submit(dax, p);
 		}
-		catch (NotBoundException ex)
+		catch(RuntimeException e)
 		{
 			System.err.println("Site manager is not found.");
 			System.exit(1);

@@ -4,6 +4,7 @@
  */
 package workflowengine.server;
 
+import workflowengine.server.filemanager.FileManager;
 import java.rmi.RemoteException;
 import java.util.HashSet;
 import java.util.Set;
@@ -24,7 +25,7 @@ import workflowengine.workflow.WorkflowFile;
  */
 public class Worker extends WorkflowExecutor
 {
-	protected static Worker instant;
+//	protected static Worker instant;
 	private TaskQueue taskQueue = new TaskQueue();
 	private ExecutorNetwork execNetwork;
 	private ExecutingProcessor[] processors;
@@ -47,7 +48,7 @@ public class Worker extends WorkflowExecutor
 		manager.registerWorker(uri, totalProcessors);
 	}
 	
-	public static Worker start() 
+	public static WorkflowExecutor start() 
 	{
 		if(instant == null)
 		{
@@ -90,7 +91,9 @@ public class Worker extends WorkflowExecutor
 				for (String inputFileUUID : wf.getInputFiles())
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+					System.out.print("Waiting for "+wff.getName()+"...");
 					FileManager.get().waitForFile(wff, wf.getSuperWfid());
+					System.out.println("Done.");
 				}
 				logger.log("Done.", false);
 
@@ -190,8 +193,19 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public Set<String> getWorkerSet()
 	{
+		if(execNetwork == null)
+		{
+			return new HashSet<>();
+		}
 		return new HashSet<>(execNetwork.getExecutorURISet());
 	}
+
+	@Override
+	public double getAvgBandwidth()
+	{
+		return -1;
+	}
+	
 	
 	
 	

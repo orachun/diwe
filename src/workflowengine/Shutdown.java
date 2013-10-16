@@ -15,7 +15,7 @@ import workflowengine.server.WorkflowExecutor;
 public class Shutdown
 {
 
-    public static void main(String[] args) throws NotBoundException, RemoteException
+    public static void main(String[] args) throws Exception
     {
         WorkflowExecutor.getRemoteExecutor(args[0]).shutdown();
     }

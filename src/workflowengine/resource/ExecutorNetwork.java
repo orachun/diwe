@@ -5,8 +5,8 @@
 package workflowengine.resource;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import workflowengine.utils.db.Cacher;
@@ -35,7 +35,7 @@ public class ExecutorNetwork
 	}
 	public Set<String> getExecutorURISet()
 	{
-		return Collections.unmodifiableSet(workers.keySet());
+		return new HashSet<>(workers.keySet());
 	}
 	public NetworkLink getLinkToWorker(String weURI)
 	{
@@ -79,5 +79,10 @@ public class ExecutorNetwork
 	{
 		//TODO: implement this
 		return 10;
+	}
+	
+	public double getLinkSpd(String to)
+	{
+		return workers.get(to).MBps;
 	}
 }

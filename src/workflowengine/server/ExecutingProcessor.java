@@ -5,7 +5,6 @@
 package workflowengine.server;
 
 import java.io.IOException;
-import java.rmi.RemoteException;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
@@ -15,7 +14,7 @@ import workflowengine.utils.Utils;
  *
  * @author orachun
  */
-public class ExecutingProcessor extends WorkflowExecutor
+public class ExecutingProcessor //extends WorkflowExecutor
 {
 	private Worker manager;
 	private Process currentProcess;
@@ -76,7 +75,6 @@ public class ExecutingProcessor extends WorkflowExecutor
 		return ts;
 	}
 
-	@Override
 	public int getTotalProcessors()
 	{
 		return 1;
@@ -101,7 +99,6 @@ public class ExecutingProcessor extends WorkflowExecutor
 		return currentProcess;
     }
 
-	@Override
 	public void stop()  //throws RemoteException
 	{
 		currentProcess.destroy();

@@ -4,7 +4,8 @@
  */
 package workflowengine.server;
 
-import java.rmi.NotBoundException;
+import java.io.File;
+import workflowengine.server.filemanager.FileManager;
 import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -27,7 +28,7 @@ import workflowengine.workflow.WorkflowFile;
 public class SiteManager extends WorkflowExecutor
 {
 	private HashMap<String, RemoteWorker> remoteWorkers = new HashMap<>();
-	protected static SiteManager instant;
+//	protected static SiteManager instant;
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
 	private TaskQueue taskQueue = new TaskQueue();
 	
@@ -36,7 +37,7 @@ public class SiteManager extends WorkflowExecutor
 		super(true, "SiteManager@"+Utils.getProp("local_port"));
 	}
 
-	public static SiteManager start() 
+	public static WorkflowExecutor start() 
 	{
 		if(instant == null)
 		{
@@ -66,6 +67,7 @@ public class SiteManager extends WorkflowExecutor
 			@Override
 			public void run()
 			{
+				
 				logger.log("Workflow "+wf.getUUID()+" is submitted.");
 				Utils.setProp(prop);
 				wf.setSubmitted(Utils.time());
@@ -83,6 +85,8 @@ public class SiteManager extends WorkflowExecutor
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
 					FileManager.get().waitForFile(wff, wf.getSuperWfid());
+					long size = new File(Utils.getProp("working_dir") + "/" + wff.getName(wf.getSuperWfid())).length();
+					wff.setSize(size);
 				}
 				logger.log("Done.", false);
 
@@ -176,49 +180,83 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public void registerWorker(String uri, int totalProcessors)  
 	{
-		execNetwork.add(uri);
-		this.totalProcessors += totalProcessors;
 		RemoteWorker rw = null;
-		while(rw == null)
+		if(remoteWorkers.containsKey(uri))
 		{
-			try
-			{
-				rw = new RemoteWorker(uri, totalProcessors);
-			}
-			catch (NotBoundException ex)
+			rw = remoteWorkers.get(uri);
+			this.totalProcessors = this.totalProcessors 
+					- rw.getTotalProcessors() 
+					+ totalProcessors;
+			rw.setTotalProcessors(totalProcessors);
+		}
+		else
+		{
+			execNetwork.add(uri);
+			this.totalProcessors += totalProcessors;
+			while(rw == null)
 			{
 				try
 				{
-					Thread.currentThread().sleep(5000);
+					rw = new RemoteWorker(uri, totalProcessors);
 				}
-				catch (InterruptedException ex1)
+				catch(Exception c)
 				{
-					logger.log("Cannot connect to worker.", ex1);
+					try
+					{
+						Thread.sleep(5000);
+					}
+					catch (InterruptedException ex1)
+					{
+						logger.log("Cannot connect to worker.", ex1);
+					}
+					rw = null;
 				}
-				rw = null;
 			}
-		}
-		if(manager != null)
-		{
+			if(manager != null)
+			{
 				manager.registerWorker(this.getURI(), this.totalProcessors);
-//			try
-//			{
-//			}
-//			catch (RemoteException ex)
-//			{
-//				logger.log("Cannot update total processors to manager.", ex);
-//			}
+			}
+			remoteWorkers.put(uri, rw);
+			avgBandwidth = -1;
+			FileManager.get().broadcaseWorkerJoined(uri);
+			Set<String> peers = new HashSet<>(getWorkerSet());
+			peers.add(uri);
+			FileManager.get().broadcastPeerSet(peers);
 		}
-		remoteWorkers.put(uri, rw);
-			rw.getWorker().greeting("Hello from "+this.getURI());
-//		try
-//		{
-//		}
-//		catch (RemoteException ex)
-//		{
-//			logger.log("Cannot send hello msg to worker.", ex);
-//		}
+		rw.getWorker().greeting("Hello from "+this.getURI());
 	}
+
+	@Override
+	public double getAvgBandwidth()
+	{
+		if(avgBandwidth != -1)
+		{
+			return avgBandwidth;
+		}
+		
+		Set<String> workers = getWorkerSet();
+		double sum = 0;
+		int count = 0;
+		for(String w : workers)
+		{
+			WorkflowExecutorInterface worker;
+			worker = WorkflowExecutor.getRemoteExecutor(w);
+			double workerBW = worker.getAvgBandwidth();
+			if(workerBW != -1)
+			{
+				int workerProcs = worker.getTotalProcessors();
+				sum += workerBW*workerProcs;
+				count += workerProcs;
+			}
+			sum += execNetwork.getLinkSpd(w);
+			count ++;
+		}
+		
+		avgBandwidth = sum / count;
+		return avgBandwidth;
+	}
+	
+	
 	
 	@Override
 	public RemoteWorker getWorker(String uri)
@@ -247,10 +285,12 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public Set<String> getWorkerSet()
 	{
-		return new HashSet<>(execNetwork.getExecutorURISet());
+		if(execNetwork == null)
+		{
+			return new HashSet<>();
+		}
+		return execNetwork.getExecutorURISet();
 	}
-	
-	
 	
 	
 	

@@ -21,10 +21,17 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.Socket;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import lipermi.exception.LipeRMIException;
+import lipermi.handler.CallHandler;
+import lipermi.handler.filter.GZipFilter;
+import lipermi.net.Client;
+import lipermi.net.IClientListener;
+import lipermi.net.Server;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
 import workflowengine.communication.HostAddress;
 //import org.apache.commons.vfs.FileSystemException;
@@ -135,6 +142,12 @@ public class Utils
         return s == null ? null : Double.parseDouble(s);
     }
 
+    public static long getLongProp(String name)
+    {
+        String s = getProp(name);
+        return s == null ? null : Long.parseLong(s);
+    }
+
     public static long time()
     {
         return (long) Math.round(System.currentTimeMillis() / 1000.0);
@@ -166,10 +179,10 @@ public class Utils
         try
         {
             Process p = Runtime.getRuntime().exec(cmds);
-            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
             StringBuilder sb = null;
             if (getOutput)
             {
+				BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 sb = new StringBuilder();
                 String line;
                 while ((line = br.readLine()) != null)
@@ -185,6 +198,12 @@ public class Utils
             return null;
         }
     }
+	
+	
+    public static String bash(String cmd, boolean getOutput)
+    {
+        return execAndWait(new String[]{"bash", "-c", cmd}, getOutput);
+    }
 
     public static boolean exec(String[] cmds)
     {
@@ -198,6 +217,12 @@ public class Utils
             return false;
         }
     }
+	
+	
+	public static void delete(String filepath)
+	{
+		new File(filepath).delete();
+	}
 
     public static boolean isFileExist(String path)
     {
@@ -570,6 +595,54 @@ public class Utils
 			{
 				Utils.PROP.setProperty(p[0].trim(), p[1].trim());
 			}
+		}
+	}
+	
+	
+	
+	private static GZipFilter gzipfilter = new GZipFilter();
+	private static HashMap<String, Client> RMIClients = new HashMap<>();
+	public static Client getRMIClient(final String uri)
+	{
+		Client c = RMIClients.get(uri);
+		if(c == null)
+		{
+			String[] s = uri.split(":");
+			try
+			{
+				c = new Client(s[0], Integer.parseInt(s[1]), new CallHandler(), gzipfilter);
+				RMIClients.put(uri, c);
+			}
+			catch (IOException ex)
+			{
+				throw new RuntimeException(ex.getMessage());
+			}
+			c.addClientListener(new IClientListener() {
+				@Override
+				public void disconnected()
+				{
+					RMIClients.remove(uri);
+				}
+			});
+		}
+		
+		return c;
+	}
+	public static void registerRMIServer(Class<?> c, Object obj)
+	{
+		registerRMIServer(c, obj, Utils.getIntProp("local_port"));
+	}
+	
+	public static void registerRMIServer(Class<?> c, Object obj, int port)
+	{
+		System.out.println("Binding port "+port);
+		Server server = new Server();
+		CallHandler callHandler = new CallHandler();
+		try {
+			callHandler.registerGlobal(c, obj);
+			server.bind(port, callHandler, new GZipFilter());
+		} catch (LipeRMIException | IOException e) {
+			e.printStackTrace();
 		}
 	}
 }

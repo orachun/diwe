@@ -28,19 +28,18 @@ import workflowengine.utils.simplegraph.DirectedGraph;
  */
 public class Workflow implements Serializable, Savable
 {
-    public static final char STATUS_SUBMITTED = 'W';
-    public static final char STATUS_SCHEDULED = 'S';
-    public static final char STATUS_COMPLETED = 'C';
-    
-    public boolean isDummy = false;
-    protected String uuid;
-    protected char status = STATUS_SUBMITTED;
-    protected DirectedGraph<String> taskGraph = new DirectedGraph<>();
-    protected String name = "";
-    protected Set<String> inputFiles = new HashSet<>(); //WorkflowFile
-    protected Set<String> outputFiles = new HashSet<>(); //WorkflowFile
+
+	public static final char STATUS_SUBMITTED = 'W';
+	public static final char STATUS_SCHEDULED = 'S';
+	public static final char STATUS_COMPLETED = 'C';
+	public boolean isDummy = false;
+	protected String uuid;
+	protected char status = STATUS_SUBMITTED;
+	protected DirectedGraph<String> taskGraph = new DirectedGraph<>();
+	protected String name = "";
+	protected Set<String> inputFiles = new HashSet<>(); //WorkflowFile
+	protected Set<String> outputFiles = new HashSet<>(); //WorkflowFile
 	protected String superWfid = "";
-	
 	protected long submitted = -1;
 	protected long startTime = -1;
 	protected long scheduledTime = -1;
@@ -48,45 +47,31 @@ public class Workflow implements Serializable, Savable
 	protected long estimatedFinishedTime = -1;
 	protected boolean isFinished = false;
 	protected long cumulatedEstimatedExecTime = -1;
-	
 	protected Set<Task> allTasks = null;	//All tasks for transfer over servers
 	protected Set<WorkflowFile> allFiles = null; //All files for transfer over servers
-	
-    public Workflow(String name, String uuid)
-    {
-        this.name = name;
+
+	public Workflow(String name, String uuid)
+	{
+		this.name = name;
 		this.uuid = uuid;
 		Cacher.cache(uuid, this);
-    }
-    
-    public void createDummyInputFiles(String destDir)
-    {
-        for(String fuuid : this.inputFiles)
-        {
+	}
+
+	public void createDummyInputFiles(String destDir)
+	{
+		for (String fuuid : this.inputFiles)
+		{
 			WorkflowFile f = WorkflowFile.get(fuuid);
-			if(f == null)
+			if (!f.getName().equals("dummy"))
 			{
-				System.out.println();
+				String outfile = destDir + "/" + f.getName();
+				File file = new File(outfile);
+				file.getParentFile().mkdirs();
+				Utils.bash("truncate --size " + (Math.round(f.getSize())) + " " + outfile, false);
 			}
-            String outfile = destDir + "/" + f.getName();
-            File file = new File(outfile);
-            file.getParentFile().mkdirs();
-            try
-            {
-                file.createNewFile();
-                Process p = Runtime.getRuntime().exec(new String[]
-                {
-                    "/bin/bash", "-c", "fallocate -l " + ((int) Math.round(f.getSize())) + "M "+outfile
-                });
-                p.waitFor();
-            }
-            catch(IOException | InterruptedException ex)
-            {
-            }
-        }
-    }
-    
-    
+		}
+	}
+
 	/**
 	 * Prepare workflow to be used further.
 	 */
@@ -94,58 +79,57 @@ public class Workflow implements Serializable, Savable
 	{
 		HashSet<String> tmpInputFiles = new HashSet<>();
 		HashSet<String> tmpOutputFiles = new HashSet<>();
-		
-        for(String taskUUID : taskGraph.getNodeSet())
-        {
-			Task t = (Task)Cacher.get(Task.class, taskUUID);
-            tmpInputFiles.addAll(t.getInputFileUUIDs());
+
+		for (String taskUUID : taskGraph.getNodeSet())
+		{
+			Task t = (Task) Cacher.get(Task.class, taskUUID);
+			tmpInputFiles.addAll(t.getInputFiles());
 			tmpOutputFiles.addAll(t.getOutputFiles());
-        }
-        
+		}
+
 		inputFiles = new HashSet<>(tmpInputFiles);
 		outputFiles = new HashSet<>(tmpOutputFiles);
-		
+
 		inputFiles.removeAll(tmpOutputFiles);
 		outputFiles.removeAll(tmpInputFiles);
 	}
-    
- 
-    
-	
-	
+
 	/////////////////////////Getters and Setters//////////////////////
-	
-    public Set<String> getInputFiles()
-    {
-        return new HashSet(inputFiles);
-    }
-	
-    
-    
-    /**
-     * Return task queue ordered by the task dependency that the parent
-     * task will come before the child task
-     * @return 
-     */
-    public Queue<String> getTaskQueue()
-    {
-        return taskGraph.getOrderedNodes();
-    }
-    
-    public double getCumulatedExecTime()
-    {
-        double time = 0;
-        for(String taskUUID : taskGraph.getNodeSet())
-        {
-            time += Task.get(taskUUID).getEstimatedExecTime();
-        }
-        return time;
-    }
-	
+	public Set<String> getInputFiles()
+	{
+		return new HashSet(inputFiles);
+	}
+
+	public Set<String> getOutputFiles()
+	{
+		return new HashSet(outputFiles);
+	}
+
+	/**
+	 * Return task queue ordered by the task dependency that the parent task
+	 * will come before the child task
+	 *
+	 * @return
+	 */
+	public Queue<String> getTaskQueue()
+	{
+		return taskGraph.getOrderedNodes();
+	}
+
+	public double getCumulatedExecTime()
+	{
+		double time = 0;
+		for (String taskUUID : taskGraph.getNodeSet())
+		{
+			time += Task.get(taskUUID).getEstimatedExecTime();
+		}
+		return time;
+	}
+
 	public Workflow getSubworkflow(String name, Collection<String> tasksInSubWf)
 	{
 		Workflow w = new Workflow(name, Utils.uuid());
-		for(String taskUUID : tasksInSubWf)
+		for (String taskUUID : tasksInSubWf)
 		{
 			w.taskGraph.addNode(taskUUID);
 			for (String cTaskUUID : this.getChild(taskUUID))
@@ -167,7 +151,6 @@ public class Workflow implements Serializable, Savable
 		w.superWfid = this.getSuperWfid();
 		return w;
 	}
-    
 
 	public long getStartTime()
 	{
@@ -208,7 +191,7 @@ public class Workflow implements Serializable, Savable
 	{
 		this.estimatedFinishedTime = estimatedFinishedTime;
 	}
-	
+
 	public char getStatus()
 	{
 		return status;
@@ -218,62 +201,64 @@ public class Workflow implements Serializable, Savable
 	{
 		this.status = status;
 	}
-    
+
 	public void setSubmitted(long submitted)
 	{
 		this.submitted = submitted;
 	}
-	
-    public static boolean isFinished()
-    {
-        return isFinished();
-    }
-    public String getUUID()
-    {
-        return uuid;
-    }
-	
+
+	public static boolean isFinished()
+	{
+		return isFinished();
+	}
+
+	public String getUUID()
+	{
+		return uuid;
+	}
+
 	public boolean isTaskReady(String tid)
 	{
-		for(String parent : this.getParent(tid))
+		for (String parent : this.getParent(tid))
 		{
-			if(Task.get(parent).getStatus().status != TaskStatus.STATUS_COMPLETED)
+			if (Task.get(parent).getStatus().status != TaskStatus.STATUS_COMPLETED)
 			{
 				return false;
 			}
 		}
 		return true;
 	}
-	
-    @Override
-    public String toString()
-    {
-        return name;
-    }
-    @Override
-    public boolean equals(Object o)
-    {
-        return o instanceof Workflow && this.uuid.equals(((Workflow)o).uuid);
-    }
 
-    @Override
-    public int hashCode()
-    {
-        int hash = 5;
-        hash = 53 * hash + Objects.hashCode(this.name);
-        return hash;
-    }
-    public int getTotalTasks()
-    {
-        return taskGraph.size();
-    }
+	@Override
+	public String toString()
+	{
+		return name;
+	}
 
-    public String getName()
-    {
-        return name;
-    }
-	
-	
+	@Override
+	public boolean equals(Object o)
+	{
+		return o instanceof Workflow && this.uuid.equals(((Workflow) o).uuid);
+	}
+
+	@Override
+	public int hashCode()
+	{
+		int hash = 5;
+		hash = 53 * hash + Objects.hashCode(this.name);
+		return hash;
+	}
+
+	public int getTotalTasks()
+	{
+		return taskGraph.size();
+	}
+
+	public String getName()
+	{
+		return name;
+	}
+
 	public Set<String> getTaskSet()
 	{
 		return taskGraph.getNodeSet();
@@ -288,36 +273,37 @@ public class Workflow implements Serializable, Savable
 	{
 		return taskGraph.getChild(n);
 	}
-	
+
 	public Set<String> getStartTasks()
 	{
 		return taskGraph.getRoots();
 	}
-	
+
 	public Set<String> getEndTasks()
 	{
 		return taskGraph.getLeaves();
 	}
-	
+
 	/**
-	 * Return the name of the working directory (not full path) for 
-	 * this workflow
-	 * @return 
+	 * Return the name of the working directory (not full path) for this
+	 * workflow
+	 *
+	 * @return
 	 */
 	public String getSuperWfid()
 	{
 		return (superWfid.isEmpty() ? uuid : superWfid);
 	}
-	
+
 	public boolean checkIfFinished()
 	{
-		if(isFinished)
+		if (isFinished)
 		{
 			return true;
 		}
-		for(String t : getEndTasks())
+		for (String t : getEndTasks())
 		{
-			if(Task.get(t).getStatus().status != TaskStatus.STATUS_COMPLETED)
+			if (Task.get(t).getStatus().status != TaskStatus.STATUS_COMPLETED)
 			{
 				return false;
 			}
@@ -325,20 +311,16 @@ public class Workflow implements Serializable, Savable
 		isFinished = true;
 		return true;
 	}
-	
-	
-	
-	
-	
-	
+
 	public static Workflow get(String uuid)
 	{
-		return (Workflow)Cacher.get(Workflow.class, uuid);
+		return (Workflow) Cacher.get(Workflow.class, uuid);
 	}
-	
+
 	public static Workflow getInstance(Object key)
 	{
-		try{
+		try
+		{
 			DBRecord r = DBRecord.select("workflow",
 					new DBRecord().set("wfid", key.toString())).get(0);
 			Workflow wf = new Workflow(r.get("name"), r.get("wfid"));
@@ -349,10 +331,10 @@ public class Workflow implements Serializable, Savable
 			wf.startTime = r.getLong("started_at");
 			wf.status = r.get("status").charAt(0);
 			wf.submitted = r.getLong("submitted");
-			
+
 			List<DBRecord> res = DBRecord.select("workflow_task_depen",
 					new DBRecord().set("wfid", key.toString()));
-			for(DBRecord r2 : res)
+			for (DBRecord r2 : res)
 			{
 				wf.taskGraph.addNodes(r2.get("parent"), r2.get("child"));
 			}
@@ -364,11 +346,19 @@ public class Workflow implements Serializable, Savable
 			return null;
 		}
 	}
+	private static final String[] workflowKeys = new String[]
+	{
+		"wfid"
+	};
+	private static final String[] workflowTaskKeys = new String[]
+	{
+		"wfid", "tid"
+	};
+	private static final String[] taskDepenKeys = new String[]
+	{
+		"parent", "child"
+	};
 
-	
-	private static final String[] workflowKeys = new String[]{"wfid"};
-	private static final String[] workflowTaskKeys = new String[]{"wfid", "tid"};
-	private static final String[] taskDepenKeys = new String[]{"parent", "child"};
 	@Override
 	public void save()
 	{
@@ -383,10 +373,10 @@ public class Workflow implements Serializable, Savable
 				.set("est_finish", estimatedFinishedTime)
 				.set("cumulated_time", cumulatedEstimatedExecTime)
 				.upsert(workflowKeys);
-		
-		if(allTasks != null)
+
+		if (allTasks != null)
 		{
-			for(Task task: allTasks)
+			for (Task task : allTasks)
 			{
 				task.save();
 				Cacher.cache(task.getUUID(), task);
@@ -400,19 +390,19 @@ public class Workflow implements Serializable, Savable
 				Cacher.cache(f.getUUID(), f);
 			}
 		}
-		
-		
-		
+
+
+
 		Queue<String> taskQueue = this.getTaskQueue();
-		while(!taskQueue.isEmpty())
+		while (!taskQueue.isEmpty())
 		{
 			String task = taskQueue.poll();
 			new DBRecord("workflow_task")
 					.set("wfid", this.uuid)
 					.set("tid", task)
 					.upsert(workflowTaskKeys);
-			
-			for(String child : this.getChild(task))
+
+			for (String child : this.getChild(task))
 			{
 				new DBRecord("workflow_task_depen")
 						.set("parent", task)
@@ -423,33 +413,32 @@ public class Workflow implements Serializable, Savable
 		}
 		System.gc();
 	}
-	
-	
+
 	public void prepareRemoteSubmit()
 	{
 		allTasks = new HashSet<>();
 		allFiles = new HashSet<>();
-		
-		for(String t : getStartTasks())
+
+		for (String t : getStartTasks())
 		{
 			Task task = Task.get(t);
-			for(String f : task.getInputFileUUIDs())
+			for (String f : task.getInputFiles())
 			{
 				allFiles.add(WorkflowFile.get(f));
 			}
 		}
-		
-		for(String t : taskGraph.getNodeSet())
+
+		for (String t : taskGraph.getNodeSet())
 		{
 			Task task = Task.get(t);
 			allTasks.add(task);
-			for(String f : task.getOutputFiles())
+			for (String f : task.getOutputFiles())
 			{
 				allFiles.add(WorkflowFile.get(f));
 			}
 		}
 	}
-	
+
 	public void finalizedRemoteSubmit()
 	{
 		if (allFiles != null)
@@ -460,25 +449,24 @@ public class Workflow implements Serializable, Savable
 			}
 			allFiles = null;
 		}
-		if(allTasks != null)
+		if (allTasks != null)
 		{
-			for(Task task: allTasks)
+			for (Task task : allTasks)
 			{
 				Cacher.cache(task.getUUID(), task);
 			}
 			allTasks = null;
 		}
 	}
-	
+
 	public boolean containsTask(String tid)
 	{
 		return taskGraph.getNodeSet().contains(tid);
 	}
-	
-	
-    public static void main(String[] args) throws DBException, FileNotFoundException
-    {
-        Workflow wf = WorkflowFactory.fromDummyDAX("/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml", "Inspiral_30");
+
+	public static void main(String[] args) throws DBException, FileNotFoundException
+	{
+		Workflow wf = WorkflowFactory.fromDummyDAX("/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml", "Inspiral_30");
 		Cacher.flushAll();
-    }
+	}
 }

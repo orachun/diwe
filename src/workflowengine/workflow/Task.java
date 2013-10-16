@@ -47,7 +47,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
         outputs.add(f.getUUID());
     }
 	
-    public Set<String> getInputFileUUIDs()
+    public Set<String> getInputFiles()
     {
         return new HashSet<>(inputs);
     }
@@ -59,7 +59,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
     public Set<String> getOutputFileUUIDsForTask(String childTaskUUID)
     {
         Set<String> out = this.getOutputFiles();
-        Set<String> in = Task.get(childTaskUUID).getInputFileUUIDs();
+        Set<String> in = Task.get(childTaskUUID).getInputFiles();
         Set<String> files = new HashSet<>();
         for (String f : in)
         {

@@ -26,9 +26,9 @@ public class NetworkLink
 		this.unitCost = unitCost;
     }
 	
-	public double getTransferTime(double fileSizeInMB)
+	public double getTransferTime(double fileSizeInBytes)
 	{
-		return fileSizeInMB/MBps;
+		return fileSizeInBytes/1024.0/(MBps);
 	}
 	public double getTransferTime(WorkflowFile wff)
 	{
