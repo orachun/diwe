@@ -319,7 +319,6 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		}
 		
 		new Thread(){
-
 			@Override
 			public void run()
 			{

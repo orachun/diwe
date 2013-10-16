@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
-import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 
@@ -28,12 +28,12 @@ public class TaskQueue implements Serializable
 	private static final int WORKFLOW_ID = 0;
 	private static final int WORKER_URI = 1;
 	
-	protected Map<String, String[]> taskMap = new HashMap<>(); 
+	protected Map<String, String[]> taskMap = new ConcurrentHashMap<>(); 
 	protected LinkedList<String> taskQueue = new LinkedList<>(); //Task UUID
 		
-	public void submit(Schedule s)
+	public synchronized void submit(Schedule s)
 	{
-		taskQueue.addAll(s.getMapping().keySet());
+		taskQueue.addAll(s.getSettings().getWorkflow().getTaskQueue());
 		for (Map.Entry<String, String> entry : s.getMapping().entrySet())
 		{
 			this.taskMap.put(entry.getKey(), new String[]
@@ -47,7 +47,7 @@ public class TaskQueue implements Serializable
 	 * Poll only single ready task to be executed
 	 * @return 
 	 */
-	public ScheduleEntry poll()
+	public synchronized ScheduleEntry poll()
 	{
 		String t = taskQueue.poll();
 		if(t == null)
@@ -65,10 +65,10 @@ public class TaskQueue implements Serializable
 	}
 	
 	/**
-	 * Poll ready tasks as sub-workflows for each target
+	 * Poll ready tasks as sub-workflows for each target worker
 	 * @return a map between a target string and a set of sub-workflows
 	 */
-	public Map<String, Set<Workflow>> pollNextReadyTasks()
+	public synchronized Map<String, Set<Workflow>> pollNextReadyTasks()
 	{
 		//Site -> (Workflow, Task Set)		
 		HashMap<String, HashMap<Workflow, List<String>>> readyTaskMap = new HashMap<>();
@@ -79,7 +79,7 @@ public class TaskQueue implements Serializable
 		while(iterator.hasNext())
 		{
 			taskID = iterator.next();
-			Workflow wf = (Workflow)Cacher.get(Workflow.class, taskMap.get(taskID)[WORKFLOW_ID]);
+			Workflow wf = Workflow.get(taskMap.get(taskID)[WORKFLOW_ID]);
 			if(wf.isTaskReady(taskID))
 			{
 				readyTasks.add(taskID);
@@ -107,19 +107,23 @@ public class TaskQueue implements Serializable
 			}
 		}
 		
+		System.out.println("Ready tasks:"+readyTasks.size());
+		
 		//Generate sub-workflows for ready tasks
 		HashMap<String, Set<Workflow>> readyWorkflow = new HashMap<>();
 		for(Map.Entry<String, HashMap<Workflow, List<String>>> entry: readyTaskMap.entrySet())
 		{
-			for(Map.Entry<Workflow, List<String>> workflowEntry : entry.getValue().entrySet())
+			String worker = entry.getKey();
+			HashMap<Workflow, List<String>> subWorkflowMap = entry.getValue();
+			for(Map.Entry<Workflow, List<String>> workflowEntry : subWorkflowMap.entrySet())
 			{
 				Workflow oriWf = workflowEntry.getKey();
 				Workflow subWf = oriWf.getSubworkflow(oriWf.getName(), workflowEntry.getValue());
-				Set<Workflow> wfSet = readyWorkflow.get(entry.getKey());
+				Set<Workflow> wfSet = readyWorkflow.get(worker);
 				if(wfSet == null)
 				{
 					wfSet = new HashSet<>();
-					readyWorkflow.put(entry.getKey(), wfSet);
+					readyWorkflow.put(worker, wfSet);
 				}
 				wfSet.add(subWf);
 			}

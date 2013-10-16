@@ -84,6 +84,12 @@ public class Worker extends WorkflowExecutor
 				wf.save();
 				wf.finalizedRemoteSubmit();
 				
+				for(String tid : wf.getTaskSet())
+				{
+					logger.log("Task "+Task.get(tid).getName()+" is submitted.");
+				}
+				
+				
 				Utils.mkdirs(thisWorker.getWorkingDir()+"/"+wf.getSuperWfid());
 
 				//Wait for all input file exists
@@ -116,7 +122,7 @@ public class Worker extends WorkflowExecutor
 
 	
 	@Override
-	public void dispatchTask()
+	public synchronized void dispatchTask()
 	{
 		while(workingProcessors < totalProcessors && !taskQueue.isEmpty())
 		{
@@ -139,8 +145,11 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public void setTaskStatus(TaskStatus status)  
 	{
+		synchronized(this)
+		{
 			Task.get(status.taskID).setStatus(status);
-			manager.setTaskStatus(status);
+		}
+		manager.setTaskStatus(status);
 //		try
 //		{
 //			Task.get(status.taskID).setStatus(status);

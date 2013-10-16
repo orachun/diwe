@@ -76,7 +76,7 @@ public class SiteManager extends WorkflowExecutor
 				Utils.mkdirs((thisSite.getWorkingDir()+"/"+wf.getSuperWfid()));
 				if(wf.isDummy)
 				{
-					wf.createDummyInputFiles(thisSite.getWorkingDir()+"/"+wf.getSuperWfid());
+					wf.createDummyInputFiles();
 				}
 
 				//Wait for all input file exists
@@ -110,26 +110,28 @@ public class SiteManager extends WorkflowExecutor
 
 
 	@Override
-	public void dispatchTask()
+	public synchronized void dispatchTask()
 	{
 		Map<String, Set<Workflow>>  se = taskQueue.pollNextReadyTasks();
+		if(se.entrySet().isEmpty())
+		{
+			System.out.println("Error: can't find next ready tasks.");
+		}
 		for(Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 		{
 			String workerURI = entry.getKey();
 			final WorkflowExecutorInterface we = remoteWorkers.get(workerURI).getWorker();
 			for (final Workflow wf : entry.getValue())
 			{
-				logger.log("Dispatching subworkflow "+wf.getUUID()+ " to "+ workerURI);
+				//ogger.log("Dispatching subworkflow "+wf.getUUID()+ " to "+ workerURI);
+				
+				for(String tid : wf.getTaskSet())
+				{
+					logger.log("Dispatching task "+Task.get(tid).getName()+ " to "+ workerURI);
+				}
+				
 				wf.prepareRemoteSubmit();
-					we.submit(wf, null);
-//				try
-//				{
-//					we.submit(wf, null);
-//				}
-//				catch (RemoteException ex)
-//				{
-//					logger.log("Cannot submit workflow to remote worker.", ex);
-//				}
+				we.submit(wf, null);
 			}
 		}
 	}
@@ -137,19 +139,13 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public void setTaskStatus(TaskStatus status)  
 	{
-		Task.get(status.taskID).setStatus(status);
-		
+		synchronized(this)
+		{
+			Task.get(status.taskID).setStatus(status);
+		}
 		if(manager != null)
 		{
-				manager.setTaskStatus(status);
-//			try
-//			{
-//				manager.setTaskStatus(status);
-//			}
-//			catch (RemoteException ex)
-//			{
-//				logger.log("Cannot upload task status to manager.", ex);
-//			}
+			manager.setTaskStatus(status);
 		}
 		
 		
@@ -163,8 +159,6 @@ public class SiteManager extends WorkflowExecutor
 					FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
 				}
 			}
-			
-			
 			
 			if(taskQueue.isEmpty())
 			{

@@ -24,7 +24,7 @@ public class ExecutingProcessor //extends WorkflowExecutor
 		this.manager = manager;
 	}
 	
-	public TaskStatus exec(Task t, ScheduleEntry se)
+	public synchronized TaskStatus exec(Task t, ScheduleEntry se)
 	{
 		if(currentProcess != null)
 		{
@@ -47,7 +47,7 @@ public class ExecutingProcessor //extends WorkflowExecutor
 		if(p != null)
 		{
 			manager.logger.log("Task "+t.getName()+ " is started.");
-			manager.logger.log("CMD: "+t.getCmd());
+			//manager.logger.log("CMD: "+t.getCmd());
 			try
 			{
 				int ret = p.waitFor();
@@ -56,20 +56,20 @@ public class ExecutingProcessor //extends WorkflowExecutor
 				{
 					ts = ts.complete();
 					manager.setTaskStatus(ts);
-					manager.logger.log("Task "+t.getUUID()+ " is completed.");
+					manager.logger.log("Task "+t.getName()+ " is completed.");
 				}
 				else
 				{
 					ts = ts.fail(ret, "Unknown error: return value is not 0.");
 					manager.setTaskStatus(ts);
-					manager.logger.log("Task "+t.getUUID()+ " is failed: return value is not 0.");
+					manager.logger.log("Task "+t.getName()+ " is failed: return value is not 0.");
 				}
 			}
 			catch (InterruptedException ex)
 			{
 				ts = ts.fail(-1, "Waiting is interrupted before process ends.");
 				manager.setTaskStatus(ts);
-				manager.logger.log("Task "+t.getUUID()+ " is failed: Waiting is interrupted before process ends.");
+				manager.logger.log("Task "+t.getName()+ " is failed: Waiting is interrupted before process ends.");
 			}
 		}
 		return ts;

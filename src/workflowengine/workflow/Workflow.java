@@ -7,7 +7,6 @@ package workflowengine.workflow;
 import java.io.File;
 import java.io.FileNotFoundException;
 
-import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
@@ -57,17 +56,18 @@ public class Workflow implements Serializable, Savable
 		Cacher.cache(uuid, this);
 	}
 
-	public void createDummyInputFiles(String destDir)
+	public void createDummyInputFiles()
 	{
+		String superWfid = getSuperWfid();
 		for (String fuuid : this.inputFiles)
 		{
 			WorkflowFile f = WorkflowFile.get(fuuid);
 			if (!f.getName().equals("dummy"))
 			{
-				String outfile = destDir + "/" + f.getName();
+				String outfile = Utils.getProp("working_dir")+"/"+f.getName(superWfid);
 				File file = new File(outfile);
 				file.getParentFile().mkdirs();
-				Utils.bash("truncate --size " + (Math.round(f.getSize())) + " " + outfile, false);
+				Utils.bash("truncate --size " + (int)(Math.round(f.getSize())) + " " + outfile, false);
 			}
 		}
 	}
