@@ -221,7 +221,8 @@ public class SiteManager extends WorkflowExecutor
 			FileManager.get().broadcaseWorkerJoined(uri);
 			Set<String> peers = new HashSet<>(getWorkerSet());
 			peers.add(uri);
-			FileManager.get().broadcastPeerSet(peers);
+//			FileManager.get().broadcastPeerSet(peers);
+			FileManager.getRemoteFileManager(uri).setPeerSet(peers);
 		}
 		rw.getWorker().greeting("Hello from "+this.getURI());
 	}

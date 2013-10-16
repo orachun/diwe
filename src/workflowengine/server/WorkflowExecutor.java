@@ -55,45 +55,36 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		Utils.mkdirs(Utils.getProp("working_dir"));
 		instant = this;
 		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
-//		this.uri = "//" + Utils.getProp("local_hostname") + "/" + name;
 		this.uri = Utils.getProp("local_hostname")+":"+Utils.getIntProp("local_port");
 		DBRecord.prepareConnection();
 		if (registerForRMI)
-		{
-//			try
-//			{
-//				System.out.println("Binding workflow executor to URI: " + uri);
-//				Naming.rebind(name, this);
-//			}
-//			catch (MalformedURLException e)
-//			{
-//				throw new RuntimeException(e.getMessage(), e);
-//			}
-//
+		{			
 			
 			Utils.registerRMIServer(WorkflowExecutorInterface.class, this);
-			
-			
-			if (Utils.hasProp("manager_host")
+			boolean hasManager = Utils.hasProp("manager_host")
 					&& !Utils.getProp("manager_host").isEmpty()
 					&& Utils.hasProp("manager_port")
-					&& !Utils.getProp("manager_port").isEmpty())
+					&& !Utils.getProp("manager_port").isEmpty();
+			if (hasManager)
 			{
-//				managerURI = "//" + Utils.getProp("manager_host") 
-//						+ "/SiteManager@" + Utils.getProp("manager_port");
 				managerURI = Utils.getProp("manager_host")+":"+Utils.getProp("manager_port");
 				while (manager == null)
 				{
 					manager = (WorkflowExecutorInterface) WorkflowExecutor
 							.getRemoteExecutor(managerURI);
 				}
-				manager.registerWorker(uri, totalProcessors);
-				manager.greeting("Hello from " + uri);
+				
 			}
 			System.out.println("Done.");
 			System.out.println("Initializing file manager...");
 			FileManager.get();
 			
+			if (hasManager)
+			{
+				System.out.println("Registering to manager...");
+				manager.registerWorker(uri, totalProcessors);
+				manager.greeting("Hello from " + uri);
+			}
 			System.out.println("Done.");
 		}
 	}
@@ -106,25 +97,28 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	
 	public static WorkflowExecutorInterface getRemoteExecutor(String weURI)
 	{
-//		try
-//		{
-//			return (WorkflowExecutorInterface) Naming.lookup(weURI);
-////			String[] s = weURI.replace("//", "").split("/");
-////			return (WorkflowExecutorInterface) LocateRegistry.getRegistry(s[0]).lookup(s[1]);
-//		}
-//		catch (MalformedURLException|RemoteException e)
-//		{
-//			throw new RuntimeException(e.getMessage(), e);
-//		}
-		try
+		WorkflowExecutorInterface worker = null;
+		int tries = 0;
+		while(worker == null && tries < 10)
 		{
-			Client c = Utils.getRMIClient(weURI);
-			return (WorkflowExecutorInterface) c.getGlobal(WorkflowExecutorInterface.class);
+			try
+			{
+				Client c = Utils.getRMIClient(weURI);
+				worker = (WorkflowExecutorInterface) c.getGlobal(WorkflowExecutorInterface.class);
+			}
+			catch (Exception e)
+			{
+				worker = null;
+				tries++;
+				try
+				{
+					Thread.sleep(1000);
+				}
+				catch (InterruptedException ex)
+				{}
+			}
 		}
-		catch (Exception e)
-		{
-			return null;
-		}
+		return worker;
 	}
 	
 	/**
@@ -133,7 +127,6 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	 */
 	public static WorkflowExecutorInterface getSiteManager()
 	{
-//		return getRemoteExecutor("//"+Utils.getProp("manager_host")+"/SiteManager@"+Utils.getProp("manager_port"));
 		try
 		{
 			return getRemoteExecutor(Utils.getProp("manager_host")+":"+Utils.getIntProp("manager_port"));
