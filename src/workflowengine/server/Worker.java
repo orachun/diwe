@@ -93,15 +93,15 @@ public class Worker extends WorkflowExecutor
 				Utils.mkdirs(thisWorker.getWorkingDir()+"/"+wf.getSuperWfid());
 
 				//Wait for all input file exists
-				logger.log("Waiting for all input files...");
+				//logger.log("Waiting for all input files...");
 				for (String inputFileUUID : wf.getInputFiles())
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-					System.out.print("Waiting for "+wff.getName()+"...");
-					FileManager.get().waitForFile(wff, wf.getSuperWfid());
-					System.out.println("Done.");
+//					System.out.print("Waiting for "+wff.getName()+"...");
+					FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
+//					System.out.println("Done.");
 				}
-				logger.log("Done.", false);
+				//logger.log("Done.", false);
 
 				logger.log("Scheduling the submitted workflow...");
 				Schedule s = thisWorker.getScheduler().getSchedule(
@@ -164,7 +164,7 @@ public class Worker extends WorkflowExecutor
 			//Upload output files
 			for(String wff : Task.get(status.taskID).getOutputFiles())
 			{
-				FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
+				FileManager.get().outputCreated(WorkflowFile.get(wff).getName(status.schEntry.wfDir));
 			}
 			
 			workingProcessors--;

@@ -228,6 +228,20 @@ public class Workflow implements Serializable, Savable
 		}
 		return true;
 	}
+	
+	public boolean isTaskReady(String tid, Set<String> supposeReadyTasks)
+	{
+		for (String parent : this.getParent(tid))
+		{
+			if (!supposeReadyTasks.contains(parent) && 
+					Task.get(parent).getStatus().status != TaskStatus.STATUS_COMPLETED)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+	
 
 	@Override
 	public String toString()

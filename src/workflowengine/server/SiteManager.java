@@ -17,6 +17,7 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
+import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFile;
@@ -68,11 +69,12 @@ public class SiteManager extends WorkflowExecutor
 			public void run()
 			{
 				
-				logger.log("Workflow "+wf.getUUID()+" is submitted.");
+				logger.log("Sub-workflow of "+wf.getSuperWfid()+" is submitted.");
 				Utils.setProp(prop);
 				wf.setSubmitted(Utils.time());
 				wf.save();
 				wf.finalizedRemoteSubmit();
+				Cacher.cache(wf.getUUID(), wf);
 				Utils.mkdirs((thisSite.getWorkingDir()+"/"+wf.getSuperWfid()));
 				if(wf.isDummy)
 				{
@@ -84,7 +86,7 @@ public class SiteManager extends WorkflowExecutor
 				for(String inputFileUUID : wf.getInputFiles())
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-					FileManager.get().waitForFile(wff, wf.getSuperWfid());
+					FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
 					long size = new File(Utils.getProp("working_dir") + "/" + wff.getName(wf.getSuperWfid())).length();
 					wff.setSize(size);
 				}
@@ -95,8 +97,11 @@ public class SiteManager extends WorkflowExecutor
 				s.save();
 				logger.log("Done.", false);
 
+				logger.log("Submit scheduled tasks into the queue...");
 				FileManager.get().setSchedule(s);
 				taskQueue.submit(s);
+				logger.log("Done.");
+				
 				dispatchTask();
 			}
 		}.start();
@@ -113,25 +118,19 @@ public class SiteManager extends WorkflowExecutor
 	public synchronized void dispatchTask()
 	{
 		Map<String, Set<Workflow>>  se = taskQueue.pollNextReadyTasks();
-		if(se.entrySet().isEmpty())
-		{
-			System.out.println("Error: can't find next ready tasks.");
-		}
 		for(Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 		{
 			String workerURI = entry.getKey();
 			final WorkflowExecutorInterface we = remoteWorkers.get(workerURI).getWorker();
 			for (final Workflow wf : entry.getValue())
 			{
-				//ogger.log("Dispatching subworkflow "+wf.getUUID()+ " to "+ workerURI);
-				
-				for(String tid : wf.getTaskSet())
-				{
-					logger.log("Dispatching task "+Task.get(tid).getName()+ " to "+ workerURI);
-				}
-				
+				logger.log("Dispatching subworkflow to "+ workerURI);
 				wf.prepareRemoteSubmit();
 				we.submit(wf, null);
+				for(String tid : wf.getTaskSet())
+				{
+					setTaskStatus(TaskStatus.dispatchedStatus(tid));
+				}
 			}
 		}
 	}
@@ -152,13 +151,13 @@ public class SiteManager extends WorkflowExecutor
 		if(status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			//Upload output files
-			if(manager!=null)
-			{
-				for(String wff : Task.get(status.taskID).getOutputFiles())
-				{
-					FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
-				}
-			}
+//			if(manager!=null)
+//			{
+//				for(String wff : Task.get(status.taskID).getOutputFiles())
+//				{
+//					FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
+//				}
+//			}
 			
 			if(taskQueue.isEmpty())
 			{
@@ -206,10 +205,6 @@ public class SiteManager extends WorkflowExecutor
 					rw = null;
 				}
 			}
-			if(manager != null)
-			{
-				manager.registerWorker(this.getURI(), this.totalProcessors);
-			}
 			remoteWorkers.put(uri, rw);
 			avgBandwidth = -1;
 			FileManager.get().broadcaseWorkerJoined(uri);
@@ -217,6 +212,10 @@ public class SiteManager extends WorkflowExecutor
 			peers.add(uri);
 //			FileManager.get().broadcastPeerSet(peers);
 			FileManager.getRemoteFileManager(uri).setPeerSet(peers);
+		}
+		if(manager != null)
+		{
+			manager.registerWorker(this.getURI(), this.totalProcessors);
 		}
 		rw.getWorker().greeting("Hello from "+this.getURI());
 	}
@@ -248,6 +247,10 @@ public class SiteManager extends WorkflowExecutor
 		}
 		
 		avgBandwidth = sum / count;
+		if(avgBandwidth < 1)
+		{
+			avgBandwidth = 1;
+		}
 		return avgBandwidth;
 	}
 	

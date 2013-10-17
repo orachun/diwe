@@ -23,7 +23,7 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	private TaskStatus status;
     private Set<String> inputs = new HashSet<>(); //WorkflowFile
     private Set<String> outputs = new HashSet<>(); //WorkflowFile
-	private double priority = -1;
+	private double priority = 1;
 
 
     public Task(String name, String cmd, double estimateExecTime, String uuid, TaskStatus status)

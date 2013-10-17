@@ -14,6 +14,7 @@ import workflowengine.utils.Utils;
  */
 public class TaskStatus implements Serializable
 {
+    public static final char STATUS_DISPATCHED = 'D';
     public static final char STATUS_WAITING = 'W';
     public static final char STATUS_EXECUTING = 'E';
     public static final char STATUS_COMPLETED = 'C';
@@ -61,11 +62,13 @@ public class TaskStatus implements Serializable
 		this.finish = finish;
 	}
 	
-	
-	
 	public static TaskStatus waitingStatus(String tid)
 	{
 		return new TaskStatus(tid, STATUS_WAITING, -1, "", -1, -1);
+	}
+	public static TaskStatus dispatchedStatus(String tid)
+	{
+		return new TaskStatus(tid, STATUS_DISPATCHED, -1, "", -1, -1);
 	}
 	public static TaskStatus executingStatus(ScheduleEntry schEntry)
 	{

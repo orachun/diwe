@@ -59,15 +59,10 @@ public class FileManager implements FileManagerInterface
 	private WorkflowExecutorInterface manager;
 	private WorkflowExecutor thisSite;
 	private String thisURI = WorkflowExecutor.get().getURI();
-//	private final HashMap<String, Double> filePriority = new HashMap<>();
-//	private final Set<PieceInfo> existingPieces = new HashSet<>();
-//	private Map<String, Set<PieceInfo>> requiredPieces = new HashMap<>();
-//	private Map<String, Set<String>> requiringSites = new HashMap<>();
-//	private HashMap<String, Set<PieceInfo>> siteExistingPieces = new HashMap<>();
-//	private Set<String> readyFiles = new HashSet<>();
-//	private HashMap<String, TransferQueue> transferQ = new HashMap<>();
 	private final HashMap<String, Thread> uploadThreads = new HashMap<>();
-	private final Object PIECE_EXIST_LOCK = new Object();
+//	private final Object PIECE_EXIST_LOCK = new Object();
+	private final Object PIECE_RETRIEVED_LOCK = new Object();
+	private final Object TRANSFER_QUEUE_LOCK = new Object();
 	private DBCollection reqPcsColl;
 	private DBCollection fPrtColl;
 	private DBCollection exisPcsColl;
@@ -153,6 +148,7 @@ public class FileManager implements FileManagerInterface
 			{
 				Thread t = new Thread("Upload thread for "+uri)
 				{
+					@Override
 					public void run()
 					{
 						uploadPiece(uri);
@@ -186,16 +182,26 @@ public class FileManager implements FileManagerInterface
 			}
 		}
 	}
+	
+	private void addRequiredPiecesToQueue(String toURI)
+	{
+		DBCursor cursor = reqPcsColl.find(new BasicDBObject("worker", toURI));
+		while (cursor.hasNext())
+		{
+			DBObject obj = cursor.next();
+			addToQueue((String) obj.get("name"), (int) obj.get("no"), toURI);
+		}
+	}
 
 	private void uploadPiece(String toURI)
 	{
 		while (exisPcsColl.count(new BasicDBObject("worker", thisURI)) == 0)
 		{
-			synchronized (PIECE_EXIST_LOCK)
+			synchronized (Thread.currentThread())
 			{
 				try
 				{
-					PIECE_EXIST_LOCK.wait();
+					Thread.currentThread().wait();
 				}
 				catch (InterruptedException ex)
 				{
@@ -206,13 +212,15 @@ public class FileManager implements FileManagerInterface
 		{
 			//Update retrieved pieces
 			List<DBObject> retrieved = getRemoteFileManager(toURI).getRetrievedPieces(thisURI);
-//			pieces.removeAll(retrieved);
+			
 			for (DBObject obj : retrieved)
 			{
 				obj.removeField("_id");
 				reqPcsColl.remove(obj);
 				tferQColl.remove(obj);
-				addToQueue((String) obj.get("name"), (int) obj.get("no"), toURI);
+//				addToQueue((String) obj.get("name"), (int) obj.get("no"), toURI);
+				obj.put("worker", toURI);
+				exisPcsColl.insert(obj);
 			}
 
 
@@ -220,25 +228,28 @@ public class FileManager implements FileManagerInterface
 			BasicDBObject toWorkerQuery = new BasicDBObject("worker", toURI);
 			BasicDBObject prioritySortQuery = new BasicDBObject("priority", -1);
 			
-			if (tferQColl.count(toWorkerQuery) == 0)
-			{
-				DBCursor cursor = exisPcsColl.find(new BasicDBObject("worker", thisURI));
-				while (cursor.hasNext())
-				{
-					DBObject obj = cursor.next();
-					addToQueue((String) obj.get("name"), (int) obj.get("no"), toURI);
-				}
-			}
+			
+
 			while(tferQColl.count(toWorkerQuery) == 0)
 			{
-				synchronized(PIECE_EXIST_LOCK)
+				synchronized(Thread.currentThread())
 				{
 					try
 					{
-						PIECE_EXIST_LOCK.wait(5000);
+						Thread.currentThread().wait(5000);
 					}
 					catch (InterruptedException ex)
 					{}
+				}
+				addRequiredPiecesToQueue(toURI);
+				if (tferQColl.count(toWorkerQuery) == 0)
+				{
+					DBCursor cursor = exisPcsColl.find(new BasicDBObject("worker", thisURI));
+					while (cursor.hasNext())
+					{
+						DBObject obj = cursor.next();
+						addToQueue((String) obj.get("name"), (int) obj.get("no"), toURI);
+					}
 				}
 			}
 			DBObject nextQueueItem = tferQColl.find(toWorkerQuery)
@@ -247,6 +258,7 @@ public class FileManager implements FileManagerInterface
 			PieceInfo p = PieceInfo.get((String) nextQueueItem.get("name"), 
 					(int) nextQueueItem.get("no"), -1.0);
 			p.fileLength = (long)nextQueueItem.get("full_file_length");
+			
 			
 			//Transfer file to toURI
 			try
@@ -284,11 +296,11 @@ public class FileManager implements FileManagerInterface
 						len = fr.read(content);
 						fr.close();
 					}
-					//System.out.println("Sending " + len+" bytes of "
-					//		+ p.name.split("/")[1] + "."+p.pieceNo+ " to "+toURI+ " ...");
+//					System.out.print("Sending "
+//							+ p.name.split("/")[1] + "."+p.pieceNo+ " to "+toURI+ " ...");
 					
 					s.getOutputStream().write(content, 0, len);
-					//System.out.println("Done.");
+//					System.out.println("Done.");
 				}
 				s.close();
 				tferQColl.remove(nextQueueItem);
@@ -309,18 +321,9 @@ public class FileManager implements FileManagerInterface
 			System.gc();
 		}
 	}
-//	private Map<String, Set<PieceInfo>> uninformedRetrievedPieces = new HashMap<>();
-
+	
 	protected void pieceRetrieved(PieceInfo p, String fromWorker)
 	{
-		for (String uri : peers)
-		{
-			uinfRetPcsColl.insert(new BasicDBObject()
-					.append("name", p.name)
-					.append("no", p.pieceNo)
-					.append("worker", uri));
-		}
-
 		reqPcsColl.remove(new BasicDBObject()
 				.append("name", p.name)
 				.append("no", p.pieceNo));
@@ -334,14 +337,39 @@ public class FileManager implements FileManagerInterface
 		existingPcsObj.append("worker", fromWorker);
 		exisPcsColl.insert(existingPcsObj);
 
-		synchronized (PIECE_EXIST_LOCK)
+		notifyAllUploadThreads();
+		if(p.fileLength < 1)
 		{
-			PIECE_EXIST_LOCK.notifyAll();
+			System.out.println("Warning: Piece length less than 1.");
+			checkIfAllPieceReceived(p.name);
 		}
-
-		checkIfAllPieceReceived(p.name, p.fileLength);
+		else
+		{
+			checkIfAllPieceReceived(p.name, p.fileLength);
+		}
+		
+		synchronized(PIECE_RETRIEVED_LOCK)
+		{
+			for (String uri : peers)
+			{
+				uinfRetPcsColl.insert(new BasicDBObject()
+						.append("name", p.name)
+						.append("no", p.pieceNo)
+						.append("worker", uri));
+			}
+		}
 	}
 
+	private void notifyAllUploadThreads()
+	{
+		for(final Thread t : uploadThreads.values())
+		{
+			synchronized(t)
+			{
+				t.notifyAll();
+			}
+		}
+	}
 	
 	public void checkIfAllPieceReceived(String name)
 	{
@@ -356,6 +384,10 @@ public class FileManager implements FileManagerInterface
 	
 	public void checkIfAllPieceReceived(String name, long len)
 	{
+		if(len < 1)
+		{
+			throw new IllegalArgumentException("Length is less than 1");
+		}
 		boolean ready = true;
 		for (int i = 0; i < Math.ceil(len / (double) PIECE_LEN); i++)
 		{
@@ -394,10 +426,33 @@ public class FileManager implements FileManagerInterface
 			obj.removeField("_id");
 			fPrtColl.update(new BasicDBObject("name", obj.get("name")), obj, true, false);
 		}
+		updateQueuePriority();
 	}
 
+	private void updateQueuePriority()
+	{
+		
+		DBCursor c = tferQColl.find();
+		while(c.hasNext())
+		{
+			DBObject obj = c.next();
+			addToQueue((String)obj.get("name"), (int)obj.get("no"), (String)obj.get("worker"));
+		}
+		
+	}
+	
+	private void addToQueue(String name)
+	{
+		for(String target : peers)
+		{
+			addToQueue(name, -1, target);
+		}
+	}
+	
+	
 	/**
-	 *
+	 * Add filepiece to transfer queue.
+	 * If filepiece is already in the queue, the priority is updated
 	 * @param reqPiece must have field name, no
 	 */
 	private void addToQueue(String name, int no, String targetWorker)
@@ -424,22 +479,19 @@ public class FileManager implements FileManagerInterface
 		if(pieceExists)
 		{
 			
-			double priority = 0;
-			try{
-			priority = (double) fPrtColl.findOne(
-					new BasicDBObject("name", name)).get("priority");
-			}
-			catch(NullPointerException e)
+			double priority = 1;
+			DBObject priorityObj = fPrtColl.findOne(
+					new BasicDBObject("name", name));
+			if(priorityObj != null)
 			{
-				System.out.println(name);
-				System.exit(1);
+				priority = (double)priorityObj.get("priority");
 			}
+			
 			if(no == -1)
 			{
 				DBCursor cursor = exisPcsColl.find(extPcsQuery);
 				while(cursor.hasNext())
 				{
-					int reqSites = (int) reqPcsColl.count(pcsQuery);
 					DBObject obj = cursor.next();
 					no = (int)obj.get("no");
 					boolean targetPcsExists = exisPcsColl.count(
@@ -447,6 +499,11 @@ public class FileManager implements FileManagerInterface
 							.append("worker", targetWorker)
 							.append("no", no)
 							)>0;
+					boolean targetNeeded = reqPcsColl.count(
+							new BasicDBObject("name", name)
+							.append("worker", targetWorker)) > 0;
+					pcsQuery.append("no", no);
+					int reqSites = (int) reqPcsColl.count(pcsQuery);
 					if(!targetPcsExists)
 					{
 						tferQColl.update(
@@ -458,7 +515,7 @@ public class FileManager implements FileManagerInterface
 							.append("worker", targetWorker)
 							.append("name", name)
 							.append("no", no)
-							.append("priority", priority * (reqSites + 1) + 1)
+							.append("priority", calTransferPriority(priority, targetNeeded, reqSites))
 							.append("full_file_length", obj.get("full_file_length")),
 							true, false);
 					}
@@ -466,6 +523,9 @@ public class FileManager implements FileManagerInterface
 			}
 			else
 			{
+				boolean targetNeeded = reqPcsColl.count(new BasicDBObject("name", name)
+					.append("worker", targetWorker)
+					.append("no", no)) > 0;
 				int reqSites = (int) reqPcsColl.count(pcsQuery);
 				DBObject obj = exisPcsColl.findOne(extPcsQuery);
 				tferQColl.update(
@@ -477,7 +537,7 @@ public class FileManager implements FileManagerInterface
 					.append("worker", targetWorker)
 					.append("name", name)
 					.append("no", no)
-					.append("priority", priority * (reqSites + 1) + 1)
+					.append("priority", calTransferPriority(priority, targetNeeded, reqSites))
 					.append("full_file_length", obj.get("full_file_length")),
 					true, false);
 			
@@ -486,9 +546,12 @@ public class FileManager implements FileManagerInterface
 		System.gc();
 	}
 
+	private double calTransferPriority(double filePriority, boolean isRequired, int requiringSites)
+	{
+		return filePriority * (requiringSites + 1) + 1 + ((isRequired?0:1)*filePriority);
+	}
+	
 	@Override
-//	public void setAllRequiredPieces(Map<String, Set<PieceInfo>> requiredPieces,
-//			Map<String, Set<String>> requiringSites)
 	public void setAllRequiredPieces(String invoker, List<DBObject> list)
 	{
 		if (!invoker.equals(thisURI))
@@ -500,41 +563,24 @@ public class FileManager implements FileManagerInterface
 		{
 			addToQueue((String) obj.get("name"), (int) obj.get("no"), (String) obj.get("worker"));
 		}
-
-//		this.requiredPieces = requiredPieces;
-//		this.requiringSites = requiringSites;
-//		for (Map.Entry<String, Set<PieceInfo>> e : requiredPieces.entrySet())
-//		{
-//			TransferQueue q = transferQ.get(e.getKey());
-//			if (q == null)
-//			{
-//				q = new TransferQueue();
-//				transferQ.put(e.getKey(), q);
-//			}
-//			for (PieceInfo p : e.getValue())
-//			{
-//				Set<String> sites = requiringSites.get(p.name);
-//				if(sites == null)
-//				{
-//					System.out.println(p.name);
-//				}
-//				int totalRequiringSizes = sites.size();
-//				q.add(p, totalRequiringSizes);
-//			}
-//		}
 	}
 
+	
+	/**
+	 * 
+	 * @param invoker
+	 * @return list of DBObject containing keys: name, no
+	 */
 	@Override
 	public List<DBObject> getRetrievedPieces(String invoker)
 	{
-//		Set<PieceInfo> s = uninformedRetrievedPieces.get(invoker);
-//		if (s == null)
-//		{
-//			return new HashSet<>();
-//		}
-//		uninformedRetrievedPieces.put(invoker, new HashSet<PieceInfo>());
-//		return s;
-		return uinfRetPcsColl.find(new BasicDBObject("worker", invoker)).toArray();
+		BasicDBObject invokerQuery = new BasicDBObject("worker", invoker);
+		List<DBObject> list = uinfRetPcsColl.find(invokerQuery).toArray();
+		synchronized(PIECE_RETRIEVED_LOCK)
+		{
+			uinfRetPcsColl.remove(invokerQuery);
+		}
+		return list;
 	}
 
 	/**
@@ -545,33 +591,16 @@ public class FileManager implements FileManagerInterface
 	 */
 	public void setSchedule(Schedule s)
 	{
-		String wfid = s.getWorkflowID();
 		Workflow wf = s.getSettings().getWorkflow();
+		String wfid = wf.getSuperWfid();
 
 		//Set file requirements of input files of all tasks
 		for (String tid : wf.getTaskSet())
 		{
 			Task t = Task.get(tid);
 			String worker = s.getWorkerForTask(tid);
-//			Set<PieceInfo> reqPcs = requiredPieces.get(wkid);
-//			if (reqPcs == null)
-//			{
-//				reqPcs = new HashSet<>();
-//				requiredPieces.put(wkid, reqPcs);
-//			}
-//			for (String fid : t.getInputFiles())
-//			{
-//				WorkflowFile file = WorkflowFile.get(fid);
-//				reqPcs.add(PieceInfo.get(file.getName(wfid), -1, file.getPriority()));
-//				Set<String> siteSet = requiringSites.get(file.getName(wfid));
-//				if (siteSet == null)
-//				{
-//					siteSet = new HashSet<>();
-//					requiringSites.put(file.getName(wfid), siteSet);
-//				}
-//				siteSet.add(wkid);
-//				filePriority.put(file.getName(wfid), file.getPriority());
-//			}
+
+			
 			for (String fid : t.getInputFiles())
 			{
 				WorkflowFile file = WorkflowFile.get(fid);
@@ -586,27 +615,9 @@ public class FileManager implements FileManagerInterface
 						.append("priority", file.getPriority()), true, false);
 			}
 		}
-
-		//Set workflow output file requirement to send back
-//		Set<PieceInfo> thisFileSet = requiredPieces.get(thisURI);
-//		if (thisFileSet == null)
-//		{
-//			thisFileSet = new HashSet<>();
-//			requiredPieces.put(thisURI, thisFileSet);
-//		}
-//		
+		
 		for (String fid : wf.getOutputFiles())
 		{
-//			WorkflowFile file = WorkflowFile.get(fid);
-//			thisFileSet.add(PieceInfo.get(file.getName(wfid), -1, file.getPriority()));
-//			filePriority.put(file.getName(wfid), file.getPriority());
-//			Set<String> siteSet = requiringSites.get(file.getName(wfid));
-//			if (siteSet == null)
-//			{
-//				siteSet = new HashSet<>();
-//				requiringSites.put(file.getName(wfid), siteSet);
-//			}
-//			siteSet.add(thisURI);
 			WorkflowFile file = WorkflowFile.get(fid);
 			reqPcsColl.insert(new BasicDBObject()
 					.append("worker", thisURI)
@@ -636,6 +647,7 @@ public class FileManager implements FileManagerInterface
 						.append("full_file_length", (long)file.getSize())
 						.append("worker", thisURI));
 			}
+			readyFileColl.insert(new BasicDBObject("name", file.getName(wfid)));
 		}
 
 
@@ -649,10 +661,7 @@ public class FileManager implements FileManagerInterface
 			fm.setAllRequiredPieces(thisURI, reqPcs);
 		}
 
-		synchronized (PIECE_EXIST_LOCK)
-		{
-			PIECE_EXIST_LOCK.notifyAll();
-		}
+		notifyAllUploadThreads();
 	}
 
 	private void startListeningThread()
@@ -797,38 +806,38 @@ public class FileManager implements FileManagerInterface
 		return instant;
 	}
 
-	public void waitForFile(WorkflowFile wff, String workflowDirName)
+	public void waitForFile(String name)
 	{
-		String fname = workflowDirName + "/" + wff.getName();
 //		if(Utils.fileExists(Utils.getProp("working_dir")+"/"+fname) || readyFiles.contains(fname))
-		if (Utils.fileExists(Utils.getProp("working_dir") + "/" + fname)
-				|| readyFileColl.count(new BasicDBObject("name", fname)) > 0)
+		if (Utils.fileExists(Utils.getProp("working_dir") + "/" + name)
+				|| readyFileColl.count(new BasicDBObject("name", name)) > 0)
 		{
 			return;
 		}
-		locks.put(fname, fname);
-		synchronized (fname)
+		locks.put(name, name);
+		synchronized (name)
 		{
 //			while (!readyFiles.contains(fname))
-			while (!Utils.fileExists(Utils.getProp("working_dir") + "/" + fname)
-				&& readyFileColl.count(new BasicDBObject("name", fname)) == 0)
+			while (!Utils.fileExists(Utils.getProp("working_dir") + "/" + name)
+				&& readyFileColl.count(new BasicDBObject("name", name)) == 0)
 			{
 				try
 				{
-					fname.wait(5000);
+					name.wait(5000);
 				}
 				catch (InterruptedException ex)
 				{
 				}
-				checkIfAllPieceReceived(fname);
+				checkIfAllPieceReceived(name);
 			}
 		}
-		locks.remove(fname);
+		locks.remove(name);
 	}
 
-	public void outputCreated(WorkflowFile wff, String workflowDirName)
+	public void outputCreated(String fname)
 	{
-		String fname = workflowDirName + "/" + wff.getName();
+		
+		
 		long size = new File(Utils.getProp("working_dir") + "/" + fname).length();
 		for (int i = 0; i < Math.ceil(size / (double) PIECE_LEN); i++)
 		{
@@ -837,23 +846,10 @@ public class FileManager implements FileManagerInterface
 			exisPcsColl.insert(new BasicDBObject().append("name", fname).append("no", i)
 					.append("worker", thisURI)
 					.append("full_file_length", size));
-			readyFileColl.insert(new BasicDBObject().append("name", fname));
-			BasicDBList or = new BasicDBList();
-			or.add(new BasicDBObject("no", i));
-			or.add(new BasicDBObject("no", -1));
-			DBCursor c = reqPcsColl.find(new BasicDBObject().append("name", fname)
-					.append("$or", or));
-			while(c.hasNext())
-			{
-				DBObject obj = c.next();
-				addToQueue(fname, i, (String)obj.get("worker"));
-			}
 		}
-		
-		synchronized(PIECE_EXIST_LOCK)
-		{
-			PIECE_EXIST_LOCK.notifyAll();
-		}
+		readyFileColl.insert(new BasicDBObject().append("name", fname));
+		addToQueue(fname);
+		notifyAllUploadThreads();
 	}
 	/**
 	 * Wait until the specified file exists. Download file from manager if not

@@ -24,11 +24,12 @@ import workflowengine.workflow.Workflow;
  */
 public class TaskQueue implements Serializable
 { 
-	//TaskUUID  -> (WorkflowID, Worker URI)
 	private static final int WORKFLOW_ID = 0;
 	private static final int WORKER_URI = 1;
 	
+	//Task ID -> { WORKFLOW_ID, WORKER_URI }
 	protected Map<String, String[]> taskMap = new ConcurrentHashMap<>(); 
+	
 	protected LinkedList<String> taskQueue = new LinkedList<>(); //Task UUID
 		
 	public synchronized void submit(Schedule s)
@@ -107,7 +108,6 @@ public class TaskQueue implements Serializable
 			}
 		}
 		
-		System.out.println("Ready tasks:"+readyTasks.size());
 		
 		//Generate sub-workflows for ready tasks
 		HashMap<String, Set<Workflow>> readyWorkflow = new HashMap<>();

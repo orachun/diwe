@@ -7,10 +7,10 @@ package workflowengine.utils.simplegraph;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 
 
 /**
@@ -22,8 +22,8 @@ public class DirectedGraph<T> implements Serializable
 	public static final int PARENT_LIST = 0;
 	public static final int CHILD_LIST = 1;
     private HashMap<T, Set<T>[]> nodeMap = new HashMap<>();
-	private Set<T> rootNodes = new TreeSet<>();
-	private Set<T> leafNodes = new TreeSet<>();
+	private Set<T> rootNodes = new HashSet<>();
+	private Set<T> leafNodes = new HashSet<>();
 
     public DirectedGraph()
     {
@@ -33,7 +33,7 @@ public class DirectedGraph<T> implements Serializable
 	{
 		if(!nodeMap.containsKey(n))
 		{
-			nodeMap.put(n, new Set[]{new TreeSet<>(),new TreeSet<>()});
+			nodeMap.put(n, new Set[]{new HashSet<>(),new HashSet<>()});
 			rootNodes.add(n);
 			leafNodes.add(n);
 		}
