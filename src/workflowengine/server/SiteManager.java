@@ -5,19 +5,17 @@
 package workflowengine.server;
 
 import java.io.File;
-import workflowengine.server.filemanager.FileManager;
 import java.rmi.RemoteException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
+import workflowengine.server.filemanager.FileManager;
 import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
@@ -70,41 +68,51 @@ public class SiteManager extends WorkflowExecutor
 			@Override
 			public void run()
 			{
-				
-				logger.log("Sub-workflow of "+wf.getSuperWfid()+" is submitted.");
-				Utils.setProp(prop);
-				wf.setSubmitted(Utils.time());
-				wf.save();
-				wf.finalizedRemoteSubmit();
-				Cacher.cache(wf.getUUID(), wf);
-				Utils.mkdirs((thisSite.workingDir+"/"+wf.getSuperWfid()));
-				if(wf.isDummy)
+				synchronized(thisSite)
 				{
-					wf.createDummyInputFiles();
+					logger.log("Sub-workflow of "+wf.getSuperWfid()+" is submitted.");
+					eventLogger.start("WF_RECEIVED:"+wf.getUUID(), "");
+					Utils.setProp(prop);
+					wf.setSubmitted(Utils.time());
+					wf.save();
+					wf.finalizedRemoteSubmit();
+					Cacher.cache(wf.getUUID(), wf);
+					Utils.mkdirs((thisSite.workingDir+"/"+wf.getSuperWfid()));
+					if(wf.isDummy)
+					{
+						wf.createDummyInputFiles();
+					}
+
+					//Wait for all input file exists
+					eventLogger.start("WF_INPUT_WAIT:"+wf.getUUID(), "Waiting for all input files");
+					logger.log("Waiting for all input files...");
+					for(String inputFileUUID : wf.getInputFiles())
+					{
+						WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+						FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
+						String fullFilePath = thisSite.workingDir + "/" 
+								+ wff.getName(wf.getSuperWfid());
+						long size = new File(fullFilePath).length();
+						wff.setSize(size);
+						if(wff.getType() == WorkflowFile.TYPE_EXEC)
+						{
+							Utils.setExecutable(fullFilePath);
+						}
+					}
+					logger.log("Done.", false);
+					eventLogger.finish("WF_INPUT_WAIT:"+wf.getUUID());
+
+					eventLogger.start("SCHEDULING:"+wf.getUUID(), "");
+					logger.log("Scheduling the submitted workflow...");
+					Schedule s = thisSite.getScheduler().getSchedule(new SchedulingSettings(thisSite, wf, execNetwork, thisSite.getDefaultFC()));
+					s.save();
+					logger.log("Done.", false);
+					eventLogger.finish("SCHEDULING:"+wf.getUUID());
+
+					logger.log("Submit scheduled tasks into the queue...");
+					submitSchedule(s);
+					logger.log("Done.");
 				}
-
-				//Wait for all input file exists
-				logger.log("Waiting for all input files...");
-				for(String inputFileUUID : wf.getInputFiles())
-				{
-					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-					FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
-					long size = new File(thisSite.workingDir + "/" 
-							+ wff.getName(wf.getSuperWfid())
-							).length();
-					wff.setSize(size);
-				}
-				logger.log("Done.", false);
-
-				logger.log("Scheduling the submitted workflow...");
-				Schedule s = thisSite.getScheduler().getSchedule(new SchedulingSettings(thisSite, wf, execNetwork, thisSite.getDefaultFC()));
-				s.save();
-				logger.log("Done.", false);
-
-				logger.log("Submit scheduled tasks into the queue...");
-				submitSchedule(s);
-				logger.log("Done.");
-				
 				dispatchTask();
 			}
 		}.start();
@@ -156,6 +164,7 @@ public class SiteManager extends WorkflowExecutor
 				for(String tid : wf.getTaskSet())
 				{
 					setTaskStatus(TaskStatus.dispatchedStatus(tid));
+					eventLogger.start("TASK_DISPATCH:"+tid, "");
 				}
 			}
 		}
@@ -173,9 +182,14 @@ public class SiteManager extends WorkflowExecutor
 			manager.setTaskStatus(status);
 		}
 		
-		
-		if(status.status == TaskStatus.STATUS_COMPLETED)
+		if(status.status == TaskStatus.STATUS_EXECUTING)
 		{
+			eventLogger.finish("TASK_DISPATCH:"+status.taskID);
+			eventLogger.start("TASK_EXEC:"+status.taskID, "");
+		}
+		else if(status.status == TaskStatus.STATUS_COMPLETED)
+		{
+			eventLogger.finish("TASK_EXEC:"+status.taskID);
 			//Upload output files
 //			if(manager!=null)
 //			{
@@ -229,11 +243,11 @@ public class SiteManager extends WorkflowExecutor
 			}
 			remoteWorkers.put(uri, rw);
 			avgBandwidth = -1;
-			FileManager.get().broadcaseWorkerJoined(uri);
+			FileManager.get().workerJoined(uri);
 			Set<String> peers = new HashSet<>(getWorkerSet());
 			peers.add(uri);
 //			FileManager.get().broadcastPeerSet(peers);
-			FileManager.getRemoteFileManager(uri).setPeerSet(peers);
+			FileManager.get().setPeerSet(uri, peers);
 		}
 		if(manager != null)
 		{

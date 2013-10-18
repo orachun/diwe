@@ -148,6 +148,10 @@ public class Utils
         return s == null ? null : Long.parseLong(s);
     }
 
+	/**
+	 * 
+	 * @return time in seconds
+	 */
     public static long time()
     {
         return (long) Math.round(System.currentTimeMillis() / 1000.0);

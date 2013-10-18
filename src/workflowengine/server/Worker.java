@@ -4,10 +4,8 @@
  */
 package workflowengine.server;
 
-import java.util.HashMap;
-import workflowengine.server.filemanager.FileManager;
+import java.io.File;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
@@ -15,6 +13,7 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
+import workflowengine.server.filemanager.FileManager;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
@@ -71,37 +70,48 @@ public class Worker extends WorkflowExecutor
 			@Override
 			public void run()
 			{
-				logger.log("Workflow "+wf.getUUID()+" is submitted.");
-				Utils.setProp(prop);
-				wf.setSubmitted(Utils.time());
-				wf.save();
-				wf.finalizedRemoteSubmit();
-				
-				for(String tid : wf.getTaskSet())
+				synchronized(thisWorker)
 				{
-					logger.log("Task "+Task.get(tid).getName()+" is submitted.");
-				}
-				
-				
-				Utils.mkdirs(thisWorker.getWorkingDir()+"/"+wf.getSuperWfid());
+					logger.log("Workflow "+wf.getUUID()+" is submitted.");
+					Utils.setProp(prop);
+					wf.setSubmitted(Utils.time());
+					wf.save();
+					wf.finalizedRemoteSubmit();
 
-				//Wait for all input file exists
-				//logger.log("Waiting for all input files...");
-				for (String inputFileUUID : wf.getInputFiles())
-				{
-					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-//					System.out.print("Waiting for "+wff.getName()+"...");
-					FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
-//					System.out.println("Done.");
-				}
-				//logger.log("Done.", false);
+					for(String tid : wf.getTaskSet())
+					{
+						logger.log("Task "+Task.get(tid).getName()+" is submitted.");
+					}
 
-				logger.log("Scheduling the submitted workflow...");
-				Schedule s = thisWorker.getScheduler().getSchedule(
-						new SchedulingSettings(thisWorker, wf, execNetwork, thisWorker.getDefaultFC()));
-				s.save();
-				logger.log("Done.", false);
-				taskQueue.submit(s);
+
+					Utils.mkdirs(thisWorker.getWorkingDir()+"/"+wf.getSuperWfid());
+
+					//Wait for all input file exists
+					logger.log("Waiting for all input files...");
+					for (String inputFileUUID : wf.getInputFiles())
+					{
+						WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+	//					System.out.print("Waiting for "+wff.getName()+"...");
+						FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
+						String fullFilePath = thisWorker.workingDir + "/" 
+								+ wff.getName(wf.getSuperWfid());
+						long size = new File(fullFilePath).length();
+						wff.setSize(size);
+						if(wff.getType() == WorkflowFile.TYPE_EXEC)
+						{
+							Utils.setExecutable(fullFilePath);
+						}
+	//					System.out.println("Done.");
+					}
+					logger.log("Done.", false);
+
+					logger.log("Scheduling the submitted workflow...");
+					Schedule s = thisWorker.getScheduler().getSchedule(
+							new SchedulingSettings(thisWorker, wf, execNetwork, thisWorker.getDefaultFC()));
+					s.save();
+					logger.log("Done.", false);
+					taskQueue.submit(s);
+				}
 				dispatchTask();
 			}
 		}.start();
@@ -158,7 +168,7 @@ public class Worker extends WorkflowExecutor
 			//Upload output files
 			for(String wff : Task.get(status.taskID).getOutputFiles())
 			{
-				FileManager.get().outputCreated(WorkflowFile.get(wff).getName(status.schEntry.wfDir));
+				FileManager.get().outputFileCreated(WorkflowFile.get(wff).getName(status.schEntry.wfDir));
 			}
 			
 			workingProcessors--;

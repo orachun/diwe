@@ -4,39 +4,46 @@
  */
 package workflowengine.server.filemanager;
 
-import com.mongodb.DBObject;
-import java.util.List;
+import java.io.File;
 import java.util.Set;
+import workflowengine.schedule.Schedule;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.utils.SFTPClient;
 import workflowengine.utils.Utils;
-import workflowengine.workflow.WorkflowFile;
 
 /**
  *
  * @author orachun
  */
-public class ServerClientFileManager implements FileManagerInterface
+public class ServerClientFileManager extends FileManager
 {
+	private static ServerClientFileManager instant;
+	
+	public static FileManager get()
+	{
+		if(instant == null)
+		{
+			instant = new ServerClientFileManager();
+		}
+		return instant;
+	}
+	
 	/**
 	 * Download file from manager if not exists
 	 * 
 	 *
 	 * @param filename
 	 */
-	public void waitForFile(WorkflowFile wff, String workflowDirName)
+	@Override
+	public void waitForFile(String name)
 	{
-		String fullpath = Utils.getProp("working_dir") + "/" + workflowDirName + "/" + wff.getName();
+		String fullpath = Utils.getProp("working_dir") + "/" + name;
 		if (!Utils.fileExists(fullpath))
 		{
 			String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
 			SFTPClient.get(Utils.getProp("manager_host"),
-					remoteWorkingDir + "/" + workflowDirName + "/" + wff.getName(),
-					Utils.getProp("working_dir") + "/" + workflowDirName);
-			if (wff.getType() == WorkflowFile.TYPE_EXEC)
-			{
-				Utils.setExecutable(fullpath);
-			}
+					remoteWorkingDir + "/" + name,
+					fullpath);			
 		}
 	}
 	/**
@@ -45,58 +52,31 @@ public class ServerClientFileManager implements FileManagerInterface
 	 *
 	 * @param wff
 	 */
-	public void outputCreated(WorkflowFile wff, String workflowDirName)
+	@Override
+	public void outputFileCreated(String name)
 	{
-		String fullpath = Utils.getProp("working_dir") + "/" + workflowDirName + "/" + wff.getName();
+		String fullpath = Utils.getProp("working_dir") + "/" + name;
 		String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
 		SFTPClient.put(Utils.getProp("manager_host"),
 				fullpath,
-				remoteWorkingDir + "/" + workflowDirName);
+				remoteWorkingDir + "/" + name);
 		
 	}
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
 
 	@Override
-	public void setAllRequiredPieces(String invoker, List<DBObject> list)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
-
-	@Override
-	public void setFilePriority(List<DBObject> list)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
-
-	@Override
-	public List<DBObject> getRetrievedPieces(String invoker)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
+	public void setSchedule(Schedule s)
+	{}
 
 	@Override
 	public void workerJoined(String uri)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
+	{}
 
 	@Override
-	public void setPeerSet(Set<String> workers)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
+	public void setPeerSet(String uri, Set<String> peers)
+	{}
+
+	
+	
 	
 	
 }

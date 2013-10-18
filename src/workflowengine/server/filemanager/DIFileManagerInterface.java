@@ -12,7 +12,7 @@ import java.util.Set;
  *
  * @author orachun
  */
-public interface FileManagerInterface
+public interface DIFileManagerInterface
 {
 	/**
 	 * 
@@ -21,11 +21,11 @@ public interface FileManagerInterface
 //	public void setAllRequiredPieces(Map<String, Set<PieceInfo>> requiredPieces,
 //		Map<String, Set<String>> requiringSites);
 	
-	public void setAllRequiredPieces(String invoker, List<DBObject> list);
-	public void setFilePriority(List<DBObject> list);
+	public void setPiecesInfo(String invoker, List<DBObject> requiredPieces, List<DBObject> filePriorities);
+//	public void setFilePriority(List<DBObject> list);
 	public  List<DBObject>  getRetrievedPieces(String invoker);
 	
-	public void workerJoined(String uri);
+	public void addWorker(String uri);
 	
 	public void setPeerSet(Set<String> workers);
 }

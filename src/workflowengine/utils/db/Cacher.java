@@ -18,7 +18,7 @@ import java.util.logging.Logger;
  */
 public class Cacher
 {
-	private static int maxCacheSize = 5500;
+	private static int maxCacheSize = 20000;
 	private static HashMap<Object, Savable> cache = new HashMap<>();
 	private static LinkedList keyQ = new LinkedList();
 	public static void cache(Object key, Savable obj)

@@ -13,12 +13,13 @@ import java.util.Properties;
 import java.util.Set;
 import lipermi.net.Client;
 import workflowengine.communication.HostAddress;
+import workflowengine.monitor.EventLogger;
 import workflowengine.monitor.HTMLUtils;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
-import workflowengine.server.filemanager.FileManager;
+import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
@@ -45,6 +46,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	protected HostAddress addr;
 	protected String uri;
 	public Logger logger = Utils.getLogger();
+	protected EventLogger eventLogger;
 	protected int totalProcessors = 0;
 	protected double avgBandwidth = -1;
 //	protected Set<String> notFinishedWorkflows = new HashSet<>();
@@ -56,6 +58,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 
 	protected WorkflowExecutor(boolean registerForRMI, String name)  //throws RemoteException
 	{
+		eventLogger = new EventLogger();
+		eventLogger.start("EXEC_INIT", "Initializing executor");
 		Utils.mkdirs(Utils.getProp("working_dir"));
 		instant = this;
 		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
@@ -63,7 +67,6 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		DBRecord.prepareConnection();
 		if (registerForRMI)
 		{			
-			
 			Utils.registerRMIServer(WorkflowExecutorInterface.class, this);
 			boolean hasManager = Utils.hasProp("manager_host")
 					&& !Utils.getProp("manager_host").isEmpty()
@@ -81,7 +84,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			}
 			System.out.println("Done.");
 			System.out.println("Initializing file manager...");
-			FileManager.get();
+			DIFileManager.get();
 			
 			if (hasManager)
 			{
@@ -91,6 +94,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			}
 			System.out.println("Done.");
 		}
+		eventLogger.finish("EXEC_INIT");
 	}
 	
 	public static WorkflowExecutor get()
@@ -244,6 +248,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			}
 			sb.append("</ul>");
 		}
+		sb.append("<br/>").append(eventLogger.toHTML());
 		return sb.toString();
 	}
 	
