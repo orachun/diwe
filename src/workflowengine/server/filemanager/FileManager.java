@@ -4,7 +4,6 @@
  */
 package workflowengine.server.filemanager;
 
-import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
@@ -12,11 +11,9 @@ import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import com.mongodb.Mongo;
 import difsys.DifsysFile;
-import difsys.PieceContent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -204,8 +201,7 @@ public class FileManager implements FileManagerInterface
 					Thread.currentThread().wait();
 				}
 				catch (InterruptedException ex)
-				{
-				}
+				{}
 			}
 		}
 		while (true)
@@ -218,18 +214,17 @@ public class FileManager implements FileManagerInterface
 				obj.removeField("_id");
 				reqPcsColl.remove(obj);
 				tferQColl.remove(obj);
+				
 //				addToQueue((String) obj.get("name"), (int) obj.get("no"), toURI);
 				obj.put("worker", toURI);
 				exisPcsColl.insert(obj);
 			}
 
 
-
 			BasicDBObject toWorkerQuery = new BasicDBObject("worker", toURI);
 			BasicDBObject prioritySortQuery = new BasicDBObject("priority", -1);
 			
 			
-
 			while(tferQColl.count(toWorkerQuery) == 0)
 			{
 				synchronized(Thread.currentThread())
@@ -241,7 +236,10 @@ public class FileManager implements FileManagerInterface
 					catch (InterruptedException ex)
 					{}
 				}
-				addRequiredPiecesToQueue(toURI);
+				if(tferQColl.count(toWorkerQuery) == 0)
+				{
+					addRequiredPiecesToQueue(toURI);
+				}
 				if (tferQColl.count(toWorkerQuery) == 0)
 				{
 					DBCursor cursor = exisPcsColl.find(new BasicDBObject("worker", thisURI));
@@ -321,6 +319,8 @@ public class FileManager implements FileManagerInterface
 			System.gc();
 		}
 	}
+	
+	
 	
 	protected void pieceRetrieved(PieceInfo p, String fromWorker)
 	{

@@ -216,7 +216,10 @@ public class Workflow implements Serializable, Savable
 	{
 		return uuid;
 	}
-
+	public static boolean isTaskReady(String tid, String wfid)
+	{
+		return Workflow.get(wfid).isTaskReady(tid);
+	}
 	public boolean isTaskReady(String tid)
 	{
 		for (String parent : this.getParent(tid))

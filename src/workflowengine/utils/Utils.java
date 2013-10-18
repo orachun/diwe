@@ -645,4 +645,16 @@ public class Utils
 			e.printStackTrace();
 		}
 	}
+	
+	private static HashMap<String, Long> timerStartTime = new HashMap<>();
+	public static String startTimer()
+	{
+		String uuid = uuid();
+		timerStartTime.put(uuid, time());
+		return uuid;
+	}
+	public static long timerDuration(String key)
+	{
+		return time()-timerStartTime.get(key);
+	}
 }

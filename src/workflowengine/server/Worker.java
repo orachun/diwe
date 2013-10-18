@@ -4,9 +4,10 @@
  */
 package workflowengine.server;
 
+import java.util.HashMap;
 import workflowengine.server.filemanager.FileManager;
-import java.rmi.RemoteException;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
@@ -52,15 +53,7 @@ public class Worker extends WorkflowExecutor
 	{
 		if(instant == null)
 		{
-				instant = new Worker();
-//			try
-//			{
-//				instant = new Worker();
-//			}
-//			catch (RemoteException ex)
-//			{
-//				throw new RuntimeException(ex);
-//			}
+			instant = new Worker();
 		}
 		return instant;
 	}
@@ -129,7 +122,7 @@ public class Worker extends WorkflowExecutor
 			final ScheduleEntry se = taskQueue.poll();
 			if(se!=null)
 			{
-				logger.log("Starting execution of task "+se.taskUUID);
+				//logger.log("Starting execution of task "+se.taskUUID);
 				new Thread(){
 					@Override
 					public void run()
@@ -150,6 +143,7 @@ public class Worker extends WorkflowExecutor
 			Task.get(status.taskID).setStatus(status);
 		}
 		manager.setTaskStatus(status);
+		
 //		try
 //		{
 //			Task.get(status.taskID).setStatus(status);
@@ -168,11 +162,7 @@ public class Worker extends WorkflowExecutor
 			}
 			
 			workingProcessors--;
-			if(taskQueue.isEmpty())
-			{
-				logger.log("Task queue is empty.");
-			}
-			else
+			if(!taskQueue.isEmpty())
 			{
 				dispatchTask();
 			}

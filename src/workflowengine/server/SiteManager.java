@@ -11,6 +11,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
@@ -29,13 +31,13 @@ import workflowengine.workflow.WorkflowFile;
 public class SiteManager extends WorkflowExecutor
 {
 	private HashMap<String, RemoteWorker> remoteWorkers = new HashMap<>();
-//	protected static SiteManager instant;
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
 	private TaskQueue taskQueue = new TaskQueue();
-	
+	private String workingDir;
 	protected SiteManager() throws RemoteException
 	{
 		super(true, "SiteManager@"+Utils.getProp("local_port"));
+		workingDir = Utils.getProp("working_dir");
 	}
 
 	public static WorkflowExecutor start() 
@@ -75,7 +77,7 @@ public class SiteManager extends WorkflowExecutor
 				wf.save();
 				wf.finalizedRemoteSubmit();
 				Cacher.cache(wf.getUUID(), wf);
-				Utils.mkdirs((thisSite.getWorkingDir()+"/"+wf.getSuperWfid()));
+				Utils.mkdirs((thisSite.workingDir+"/"+wf.getSuperWfid()));
 				if(wf.isDummy)
 				{
 					wf.createDummyInputFiles();
@@ -87,7 +89,9 @@ public class SiteManager extends WorkflowExecutor
 				{
 					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
 					FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
-					long size = new File(Utils.getProp("working_dir") + "/" + wff.getName(wf.getSuperWfid())).length();
+					long size = new File(thisSite.workingDir + "/" 
+							+ wff.getName(wf.getSuperWfid())
+							).length();
 					wff.setSize(size);
 				}
 				logger.log("Done.", false);
@@ -98,8 +102,7 @@ public class SiteManager extends WorkflowExecutor
 				logger.log("Done.", false);
 
 				logger.log("Submit scheduled tasks into the queue...");
-				FileManager.get().setSchedule(s);
-				taskQueue.submit(s);
+				submitSchedule(s);
 				logger.log("Done.");
 				
 				dispatchTask();
@@ -107,6 +110,28 @@ public class SiteManager extends WorkflowExecutor
 		}.start();
 	}
 
+	private void submitSchedule(final Schedule s)
+	{
+		Thread t = new Thread()
+		{
+			@Override
+			public void run()
+			{
+				FileManager.get().setSchedule(s);
+			}
+		};
+		t.start();
+		taskQueue.submit(s);
+		try
+		{
+			t.join();
+		}
+		catch (InterruptedException ex)
+		{
+			logger.log("Error: " + ex.getMessage(), ex);
+		}
+	}
+	
 	@Override
 	public int getTotalProcessors() 
 	{
@@ -124,9 +149,10 @@ public class SiteManager extends WorkflowExecutor
 			final WorkflowExecutorInterface we = remoteWorkers.get(workerURI).getWorker();
 			for (final Workflow wf : entry.getValue())
 			{
-				logger.log("Dispatching subworkflow to "+ workerURI);
+				logger.log("Dispatching subworkflow to "+ workerURI+" ...");
 				wf.prepareRemoteSubmit();
 				we.submit(wf, null);
+				logger.log("Done");
 				for(String tid : wf.getTaskSet())
 				{
 					setTaskStatus(TaskStatus.dispatchedStatus(tid));
@@ -159,11 +185,7 @@ public class SiteManager extends WorkflowExecutor
 //				}
 //			}
 			
-			if(taskQueue.isEmpty())
-			{
-				logger.log("Task queue is empty.");
-			}
-			else
+			if(!taskQueue.isEmpty())
 			{
 				dispatchTask();
 			}
@@ -265,7 +287,7 @@ public class SiteManager extends WorkflowExecutor
 	@Override
 	public String getWorkingDir()
 	{
-		return Utils.getProp("working_dir");
+		return workingDir;
 	}
 
 	

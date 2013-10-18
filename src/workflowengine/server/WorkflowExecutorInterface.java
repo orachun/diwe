@@ -21,7 +21,7 @@ public interface WorkflowExecutorInterface extends Remote
 
 	public int getTotalProcessors() ; //throws RemoteException;
 
-	public void setTaskStatus(TaskStatus status) ; //throws RemoteException;
+	public void setTaskStatus(TaskStatus status); //throws RemoteException;
 
 	public void registerWorker(String uri, int totalProcessors); //throws RemoteException;
 

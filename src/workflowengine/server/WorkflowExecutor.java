@@ -35,6 +35,10 @@ import workflowengine.workflow.WorkflowFactory;
  */
 public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 {
+	public static final char FROM_WORKER = 'W';
+	public static final char FROM_MANAGER = 'M';
+	public static final char FROM_SELF = 'S';
+	
 	protected static WorkflowExecutor instant;
 	protected WorkflowExecutorInterface manager;
 	protected String managerURI;
