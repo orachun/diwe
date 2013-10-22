@@ -2,11 +2,12 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.resource;
+package removed;
 
 import java.util.Collection;
 import java.util.Set;
-import workflowengine.workflow.WorkflowFile;
+import workflowengine.resource.ExecutorNetwork;
+import workflowengine.resource.NetworkLink;
 
 /**
  *

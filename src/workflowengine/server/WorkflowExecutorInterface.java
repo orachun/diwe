@@ -6,7 +6,7 @@ package workflowengine.server;
 
 import java.rmi.Remote;
 import java.util.Set;
-import workflowengine.communication.HostAddress;
+import workflowengine.utils.HostAddress;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 

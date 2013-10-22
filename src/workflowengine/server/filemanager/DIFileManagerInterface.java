@@ -28,4 +28,5 @@ public interface DIFileManagerInterface
 	public void addWorker(String uri);
 	
 	public void setPeerSet(Set<String> workers);
+	public void setInactiveFile(Set<String> name);
 }

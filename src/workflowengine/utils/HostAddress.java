@@ -2,7 +2,7 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.communication;
+package workflowengine.utils;
 
 import java.io.Serializable;
 import java.util.Properties;

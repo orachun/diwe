@@ -4,9 +4,7 @@
  */
 package workflowengine.server.filemanager;
 
-import java.io.File;
 import java.util.Set;
-import workflowengine.schedule.Schedule;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.utils.SFTPClient;
 import workflowengine.utils.Utils;
@@ -40,6 +38,9 @@ public class ServerClientFileManager extends FileManager
 		String fullpath = Utils.getProp("working_dir") + "/" + name;
 		if (!Utils.fileExists(fullpath))
 		{
+//			System.out.println("Downloading: "+fullpath);
+//			System.out.println("  From: "+
+//						WorkflowExecutor.getSiteManager().getWorkingDir() + "/" + name);
 			String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
 			SFTPClient.get(Utils.getProp("manager_host"),
 					remoteWorkingDir + "/" + name,
@@ -53,30 +54,17 @@ public class ServerClientFileManager extends FileManager
 	 * @param wff
 	 */
 	@Override
-	public void outputFileCreated(String name)
+	public void outputFilesCreated(Set<String> filenames)
 	{
-		String fullpath = Utils.getProp("working_dir") + "/" + name;
-		String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
-		SFTPClient.put(Utils.getProp("manager_host"),
-				fullpath,
-				remoteWorkingDir + "/" + name);
-		
+		for(String name : filenames)
+		{
+			System.out.println("Uploading file "+name);
+			String fullpath = Utils.getProp("working_dir") + "/" + name;
+			String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
+			SFTPClient.put(Utils.getProp("manager_host"),
+					fullpath,
+					remoteWorkingDir + "/" + name);
+		}
 	}
 
-	@Override
-	public void setSchedule(Schedule s)
-	{}
-
-	@Override
-	public void workerJoined(String uri)
-	{}
-
-	@Override
-	public void setPeerSet(String uri, Set<String> peers)
-	{}
-
-	
-	
-	
-	
 }

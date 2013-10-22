@@ -73,7 +73,7 @@ public class TaskQueue implements Serializable
 	public synchronized Map<String, Set<Workflow>> pollNextReadyTasks()
 	{
 		//Site -> (Workflow, Task Set)		
-		HashMap<String, HashMap<Workflow, List<String>>> readyTaskMap = new HashMap<>();
+		HashMap<String, HashMap<Workflow, Set<String>>> readyTaskMap = new HashMap<>();
 		ListIterator<String> iterator = taskQueue.listIterator();
 		
 		String taskID;
@@ -81,14 +81,14 @@ public class TaskQueue implements Serializable
 		while(iterator.hasNext())
 		{
 			taskID = iterator.next();
+			String target = taskMap.get(taskID)[WORKER_URI];
 			Workflow wf = Workflow.get(taskMap.get(taskID)[WORKFLOW_ID]);
 			if(wf.isTaskReady(taskID))
 			{
 				readyTasks.add(taskID);
-				String target = taskMap.get(taskID)[WORKER_URI];
 				
 				//Get a map for ready sub-workflow for the target worker
-				HashMap<Workflow, List<String>> workflowReadyTasksMap = readyTaskMap.get(target);
+				HashMap<Workflow, Set<String>> workflowReadyTasksMap = readyTaskMap.get(target);
 				if(workflowReadyTasksMap == null)
 				{
 					workflowReadyTasksMap = new HashMap<>();
@@ -97,10 +97,10 @@ public class TaskQueue implements Serializable
 				
 				
 				//Get a task list for the workflow
-				List<String> readyTaskList = workflowReadyTasksMap.get(wf);
+				Set<String> readyTaskList = workflowReadyTasksMap.get(wf);
 				if(readyTaskList == null)
 				{
-					readyTaskList = new LinkedList<>();
+					readyTaskList = new HashSet<>();
 					workflowReadyTasksMap.put(wf, readyTaskList);
 				}
 				readyTaskList.add(taskID);
@@ -112,11 +112,11 @@ public class TaskQueue implements Serializable
 		
 		//Generate sub-workflows for ready tasks
 		HashMap<String, Set<Workflow>> readyWorkflow = new HashMap<>();
-		for(Map.Entry<String, HashMap<Workflow, List<String>>> entry: readyTaskMap.entrySet())
+		for(Map.Entry<String, HashMap<Workflow, Set<String>>> entry: readyTaskMap.entrySet())
 		{
 			String worker = entry.getKey();
-			HashMap<Workflow, List<String>> subWorkflowMap = entry.getValue();
-			for(Map.Entry<Workflow, List<String>> workflowEntry : subWorkflowMap.entrySet())
+			HashMap<Workflow, Set<String>> subWorkflowMap = entry.getValue();
+			for(Map.Entry<Workflow, Set<String>> workflowEntry : subWorkflowMap.entrySet())
 			{
 				Workflow oriWf = workflowEntry.getKey();
 				Workflow subWf = oriWf.getSubworkflow(oriWf.getName(), workflowEntry.getValue());

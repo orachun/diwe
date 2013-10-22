@@ -8,7 +8,8 @@ package workflowengine.communication;
  *
  * @author Orachun
  */
-import workflowengine.communication.message.Message;
+import workflowengine.utils.HostAddress;
+import removed.Message;
 import java.io.*;
 import java.net.*;
 import java.util.concurrent.ConcurrentHashMap;

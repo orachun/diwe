@@ -14,13 +14,16 @@ public class ScheduleEntry implements Serializable
 {
 	public final String taskUUID;
 	public final String target;
-	public final String wfDir;
+	/**
+	 * also used as a directory
+	 */
+	public final String superWfid;
 
-	public ScheduleEntry(String taskUUID, String target, String wfDir)
+	public ScheduleEntry(String taskUUID, String target, String superWfid)
 	{
 		this.taskUUID = taskUUID;
 		this.target = target;
-		this.wfDir = wfDir;
+		this.superWfid = superWfid;
 	}
 	
 }

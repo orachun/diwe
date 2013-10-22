@@ -1,18 +1,14 @@
 package workflowengine.schedule;
 
+import com.mongodb.BasicDBObject;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Set;
 import workflowengine.utils.db.Cacher;
-import workflowengine.utils.db.DBRecord;
+import workflowengine.utils.db.MongoDB;
 import workflowengine.workflow.Task;
-import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFile;
 
 /**
@@ -299,12 +295,19 @@ public class Schedule
 		{
 			String tid = entry.getKey();
 			String wkid = entry.getValue();
-			new DBRecord("schedule")
-					.set("tid", tid)
-					.set("wkid", wkid)
-//					.set("estimated_start", estimatedStart.get(tid))
-//					.set("estimated_finish", estimatedFinish.get(tid))
-					.upsert(keys);
+//			new DBRecord("schedule")
+//					.set("tid", tid)
+//					.set("wkid", wkid)
+////					.set("estimated_start", estimatedStart.get(tid))
+////					.set("estimated_finish", estimatedFinish.get(tid))
+//					.upsert(keys);
+			
+			MongoDB.SCHEDULE.update(new BasicDBObject("tid", tid), 
+					new BasicDBObject("tid", tid)
+					.append("wkid", wkid)
+					.append("estimated_start", estimatedStart.get(tid))
+					.append("estimated_finish", estimatedFinish.get(tid))
+					, true, false);
 		}
 	}
 	

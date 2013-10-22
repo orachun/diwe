@@ -15,7 +15,10 @@ import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
+import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.server.filemanager.FileManager;
+import workflowengine.server.filemanager.ServerClientFileManager;
+import workflowengine.utils.Threading;
 import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
 import workflowengine.workflow.Task;
@@ -74,7 +77,7 @@ public class SiteManager extends WorkflowExecutor
 					eventLogger.start("WF_RECEIVED:"+wf.getUUID(), "");
 					Utils.setProp(prop);
 					wf.setSubmitted(Utils.time());
-					wf.save();
+//					wf.save();
 					wf.finalizedRemoteSubmit();
 					Cacher.cache(wf.getUUID(), wf);
 					Utils.mkdirs((thisSite.workingDir+"/"+wf.getSuperWfid()));
@@ -107,6 +110,7 @@ public class SiteManager extends WorkflowExecutor
 					Schedule s = thisSite.getScheduler().getSchedule(new SchedulingSettings(thisSite, wf, execNetwork, thisSite.getDefaultFC()));
 					s.save();
 					logger.log("Done.", false);
+					logger.log("Estimated makespan: "+s.getMakespan());
 					eventLogger.finish("SCHEDULING:"+wf.getUUID());
 
 					logger.log("Submit scheduled tasks into the queue...");
@@ -120,23 +124,30 @@ public class SiteManager extends WorkflowExecutor
 
 	private void submitSchedule(final Schedule s)
 	{
-		Thread t = new Thread()
+		if(FileManager.get() instanceof DIFileManager)
 		{
-			@Override
-			public void run()
+			Thread t = new Thread()
 			{
-				FileManager.get().setSchedule(s);
+				@Override
+				public void run()
+				{
+					((DIFileManager)FileManager.get()).setSchedule(s);
+				}
+			};
+			t.start();
+			taskQueue.submit(s);
+			try
+			{
+				t.join();
 			}
-		};
-		t.start();
-		taskQueue.submit(s);
-		try
-		{
-			t.join();
+			catch (InterruptedException ex)
+			{
+				logger.log("Error: " + ex.getMessage(), ex);
+			}
 		}
-		catch (InterruptedException ex)
+		else
 		{
-			logger.log("Error: " + ex.getMessage(), ex);
+			taskQueue.submit(s);
 		}
 	}
 	
@@ -171,11 +182,12 @@ public class SiteManager extends WorkflowExecutor
 	}
 
 	@Override
-	public void setTaskStatus(TaskStatus status)  
+	public void setTaskStatus(final TaskStatus status)  
 	{
+		final Task t = Task.get(status.taskID);
 		synchronized(this)
 		{
-			Task.get(status.taskID).setStatus(status);
+			t.setStatus(status);
 		}
 		if(manager != null)
 		{
@@ -190,14 +202,46 @@ public class SiteManager extends WorkflowExecutor
 		else if(status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			eventLogger.finish("TASK_EXEC:"+status.taskID);
+			
 			//Upload output files
-//			if(manager!=null)
-//			{
-//				for(String wff : Task.get(status.taskID).getOutputFiles())
-//				{
-//					FileManager.get().outputCreated(WorkflowFile.get(wff), status.schEntry.wfDir);
-//				}
-//			}
+			if(manager!=null && FileManager.get() instanceof ServerClientFileManager)
+			{
+				Set<String> outFiles = new HashSet<>();
+				for(String wff : Task.get(status.taskID).getOutputFiles())
+				{
+					outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
+				}
+				FileManager.get().outputFilesCreated(outFiles);
+			}
+			
+			//Inactivate file transferring if the file is not needed by any
+			//incompleted tasks
+			if(FileManager.get() instanceof DIFileManager)
+			{
+				Threading.submitTask(new Runnable(){
+
+					@Override
+					public void run()
+					{
+						Workflow wf = Workflow.get(status.schEntry.superWfid);
+						if (wf != null)
+						{
+							Set<String> inactiveFiles = new HashSet<>();
+							for (String fid : t.getInputFiles())
+							{
+								if (!wf.isFileActive(fid))
+								{
+									inactiveFiles.add(fid);
+								}
+							}
+							if (!inactiveFiles.isEmpty())
+							{
+								((DIFileManager)FileManager.get()).setInactiveFile(inactiveFiles);
+							}
+						}
+					}
+				});
+			}
 			
 			if(!taskQueue.isEmpty())
 			{
@@ -243,11 +287,14 @@ public class SiteManager extends WorkflowExecutor
 			}
 			remoteWorkers.put(uri, rw);
 			avgBandwidth = -1;
-			FileManager.get().workerJoined(uri);
-			Set<String> peers = new HashSet<>(getWorkerSet());
-			peers.add(uri);
-//			FileManager.get().broadcastPeerSet(peers);
-			FileManager.get().setPeerSet(uri, peers);
+			
+			if(FileManager.get() instanceof DIFileManager)
+			{
+				((DIFileManager)FileManager.get()).workerJoined(uri);
+				Set<String> peers = new HashSet<>(getWorkerSet());
+				peers.add(uri);
+				((DIFileManager)FileManager.get()).setPeerSet(uri, peers);
+			}
 		}
 		if(manager != null)
 		{

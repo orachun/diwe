@@ -33,7 +33,6 @@ import lipermi.net.Client;
 import lipermi.net.IClientListener;
 import lipermi.net.Server;
 import org.apache.commons.io.filefilter.WildcardFileFilter;
-import workflowengine.communication.HostAddress;
 //import org.apache.commons.vfs.FileSystemException;
 
 /**

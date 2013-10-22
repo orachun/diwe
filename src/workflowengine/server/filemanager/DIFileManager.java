@@ -27,7 +27,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
@@ -71,6 +70,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	private DBCollection tferQColl;
 	private DBCollection uinfRetPcsColl;
 	private DBCollection readyFileColl;
+	private DBCollection inactiveFileColl;
 	
 	private int runningUploadThreads = 0;
 	private final Object RUNNING_UPLOAD_THREADS_LOCK = new Object();
@@ -100,6 +100,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 			tferQColl = db.getCollection("transfer_queue");
 			uinfRetPcsColl = db.getCollection("uninformed_retrived_pieces");
 			readyFileColl = db.getCollection("ready_files");
+			inactiveFileColl = db.getCollection("inactive_files");
 			
 		}
 		catch (UnknownHostException ex)
@@ -116,7 +117,13 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 			peers.add(Utils.getProp("manager_host")+":"+Utils.getProp("manager_port"));
 		}
 		
-		new difsys.Difsys(Utils.getProp("working_dir"), "default.properties");
+		
+		Utils.getPROP().put("fs_db_name", 
+				Utils.getProp("fs_db_name")
+				+"_"+Utils.getProp("local_hostname")
+				+"_"+Utils.getProp("local_port"));
+		
+		new difsys.Difsys(Utils.getProp("working_dir"), Utils.getPROP());
 		Utils.bash("rm -rf "+Utils.getProp("working_dir")+"/*", false);
 		Utils.bash("rm -rf "+Utils.getProp("fs_storage_dir")+"/*", false);
 		startListeningThread();
@@ -571,6 +578,10 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	 */
 	private void addToQueue(String name, int no, String targetWorker)
 	{
+		if(inactiveFileColl.count(new BasicDBObject("name", name)) > 0)
+		{
+			return;
+		}
 		BasicDBObject pcsQuery = new BasicDBObject("name", name);
 		BasicDBObject extPcsQuery = new BasicDBObject("name", name).append("worker", thisURI);
 		
@@ -966,19 +977,20 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	}
 
 	@Override
-	public void outputFileCreated(String fname)
+	public void outputFilesCreated(Set<String> filenames)
 	{
-		long size = new File(Utils.getProp("working_dir") + "/" + fname).length();
-		for (int i = 0; i < Math.ceil(size / (double) PIECE_LEN); i++)
+		for(String fname : filenames)
 		{
-//			existingPieces.add(
-//					PieceInfo.get(fname, i, wff.getPriority(), size));
-			exisPcsColl.insert(new BasicDBObject().append("name", fname).append("no", i)
-					.append("worker", thisURI)
-					.append("full_file_length", size));
+			long size = new File(Utils.getProp("working_dir") + "/" + fname).length();
+			for (int i = 0; i < Math.ceil(size / (double) PIECE_LEN); i++)
+			{
+				exisPcsColl.insert(new BasicDBObject().append("name", fname).append("no", i)
+						.append("worker", thisURI)
+						.append("full_file_length", size));
+			}
+			readyFileColl.insert(new BasicDBObject().append("name", fname));
+			addToQueue(fname);
 		}
-		readyFileColl.insert(new BasicDBObject().append("name", fname));
-		addToQueue(fname);
 		notifyAllUploadThreads();
 	}
 	/**
@@ -1019,7 +1031,6 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 //	}
 	
 	
-	@Override
 	public void setPeerSet(String uri, Set<String> peers)
 	{
 		getRemoteFileManager(uri).setPeerSet(peers);
@@ -1040,25 +1051,43 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	 * Called by SiteManager only!
 	 * @param workers 
 	 */
-	public void broadcastPeerSet(final Set<String> workers)
+//	public void broadcastPeerSet(final Set<String> workers)
+//	{
+//		setPeerSet(workers);
+//		
+//		Threading.submitTask(new Runnable()
+//		{
+//			@Override
+//			public void run()
+//			{
+//				for (String w : WorkflowExecutor.get().getWorkerSet())
+//				{
+//					DIFileManagerInterface fm = null;
+//					while (fm == null)
+//					{
+//						fm = DIFileManager.getRemoteFileManager(w);
+//					}
+//					fm.setPeerSet(workers);
+//				}
+//			}
+//		});
+//	}
+
+	@Override
+	public void setInactiveFile(Set<String> files)
 	{
-		setPeerSet(workers);
-		
-		Threading.submitTask(new Runnable()
+		for(String n : files)
 		{
-			@Override
-			public void run()
+			inactiveFileColl.insert(new BasicDBObject("name", n));
+		}
+		if(manager instanceof SiteManager)
+		{
+			for(String worker:manager.getWorkerSet())
 			{
-				for (String w : WorkflowExecutor.get().getWorkerSet())
-				{
-					DIFileManagerInterface fm = null;
-					while (fm == null)
-					{
-						fm = DIFileManager.getRemoteFileManager(w);
-					}
-					fm.setPeerSet(workers);
-				}
+				getRemoteFileManager(worker).setInactiveFile(files);
 			}
-		});
+		}
 	}
+	
+	
 }

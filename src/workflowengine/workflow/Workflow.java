@@ -4,20 +4,22 @@
  */
 package workflowengine.workflow;
 
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 import java.io.File;
 import java.io.FileNotFoundException;
 
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import workflowengine.utils.db.DBException;
 import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
-import workflowengine.utils.db.DBRecord;
+import workflowengine.utils.db.MongoDB;
 import workflowengine.utils.db.Savable;
 import workflowengine.utils.simplegraph.DirectedGraph;
 
@@ -64,16 +66,16 @@ public class Workflow implements Serializable, Savable
 			WorkflowFile f = WorkflowFile.get(fuuid);
 			if (!f.getName().equals("dummy"))
 			{
-				String outfile = Utils.getProp("working_dir")+"/"+f.getName(superWfid);
+				String outfile = Utils.getProp("working_dir") + "/" + f.getName(superWfid);
 				File file = new File(outfile);
 				file.getParentFile().mkdirs();
-				Utils.bash("truncate --size " + (int)(Math.round(f.getSize())) + " " + outfile, false);
+				Utils.bash("truncate --size " + (int) (Math.round(f.getSize())) + " " + outfile, false);
 			}
 		}
 	}
 
 	/**
-	 * Prepare workflow to be used further.
+	 * Prepare workflow to be used further. Gather workflow input/output files
 	 */
 	public void finalizeWorkflow()
 	{
@@ -216,10 +218,12 @@ public class Workflow implements Serializable, Savable
 	{
 		return uuid;
 	}
+
 	public static boolean isTaskReady(String tid, String wfid)
 	{
 		return Workflow.get(wfid).isTaskReady(tid);
 	}
+
 	public boolean isTaskReady(String tid)
 	{
 		for (String parent : this.getParent(tid))
@@ -231,20 +235,19 @@ public class Workflow implements Serializable, Savable
 		}
 		return true;
 	}
-	
+
 	public boolean isTaskReady(String tid, Set<String> supposeReadyTasks)
 	{
 		for (String parent : this.getParent(tid))
 		{
-			if (!supposeReadyTasks.contains(parent) && 
-					Task.get(parent).getStatus().status != TaskStatus.STATUS_COMPLETED)
+			if (!supposeReadyTasks.contains(parent)
+					&& Task.get(parent).getStatus().status != TaskStatus.STATUS_COMPLETED)
 			{
 				return false;
 			}
 		}
 		return true;
 	}
-	
 
 	@Override
 	public String toString()
@@ -329,6 +332,22 @@ public class Workflow implements Serializable, Savable
 		return true;
 	}
 
+	public boolean isFileActive(String fid)
+	{
+		for (String tid : getTaskSet())
+		{
+			Task t = Task.get(tid);
+			char s = t.getStatus().status;
+			if (s != TaskStatus.STATUS_EXECUTING
+					&& s != TaskStatus.STATUS_COMPLETED
+					&& t.getInputFiles().contains(fid))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	public static Workflow get(String uuid)
 	{
 		return (Workflow) Cacher.get(Workflow.class, uuid);
@@ -336,60 +355,71 @@ public class Workflow implements Serializable, Savable
 
 	public static Workflow getInstance(Object key)
 	{
-		try
-		{
-			DBRecord r = DBRecord.select("workflow",
-					new DBRecord().set("wfid", key.toString())).get(0);
-			Workflow wf = new Workflow(r.get("name"), r.get("wfid"));
-			wf.cumulatedEstimatedExecTime = r.getLong("cumulated_time");
-			wf.estimatedFinishedTime = r.getLong("est_finish");
-			wf.finishedTime = r.getLong("finished_at");
-			wf.scheduledTime = r.getLong("scheduled_at");
-			wf.startTime = r.getLong("started_at");
-			wf.status = r.get("status").charAt(0);
-			wf.submitted = r.getLong("submitted");
-
-			List<DBRecord> res = DBRecord.select("workflow_task_depen",
-					new DBRecord().set("wfid", key.toString()));
-			for (DBRecord r2 : res)
-			{
-				wf.taskGraph.addNodes(r2.get("parent"), r2.get("child"));
-			}
-			wf.superWfid = r.get("superwfid");
-			return wf;
-		}
-		catch (IndexOutOfBoundsException e)
+		DBObject obj = MongoDB.WORKFLOW.findOne(new BasicDBObject("wfid", key.toString()));
+		if (obj == null)
 		{
 			return null;
 		}
+		Workflow wf = new Workflow((String) obj.get("name"), (String) obj.get("wfid"));
+		wf.cumulatedEstimatedExecTime = (long) obj.get("cumulated_time");
+		wf.estimatedFinishedTime = (long) obj.get("est_finish");
+		wf.finishedTime = (long) obj.get("finished_at");
+		wf.scheduledTime = (long) obj.get("scheduled_at");
+		wf.startTime = (long) obj.get("started_at");
+		wf.status = ((String) obj.get("status")).charAt(0);
+		wf.submitted = (long) obj.get("submitted");
+		wf.superWfid = (String) obj.get("superwfid");
+
+		BasicDBList tasks = (BasicDBList) obj.get("tasks");
+		for (Object o : tasks)
+		{
+			DBObject t = (DBObject) o;
+			BasicDBList parents = (BasicDBList) t.get("parents");
+			for (Object po : parents)
+			{
+				wf.taskGraph.addNodes((String) po, (String) t.get("tid"));
+			}
+			BasicDBList children = (BasicDBList) t.get("children");
+			for (Object co : children)
+			{
+				wf.taskGraph.addNodes((String) t.get("tid"), (String) co);
+			}
+		}
+		wf.finalizeWorkflow();
+		return wf;
+
 	}
-	private static final String[] workflowKeys = new String[]
-	{
-		"wfid"
-	};
-	private static final String[] workflowTaskKeys = new String[]
-	{
-		"wfid", "tid"
-	};
-	private static final String[] taskDepenKeys = new String[]
-	{
-		"parent", "child"
-	};
 
 	@Override
 	public void save()
 	{
-		new DBRecord("workflow")
-				.set("wfid", uuid)
-				.set("superwfid", superWfid)
-				.set("name", name)
-				.set("submitted", submitted)
-				.set("status", String.valueOf(status))
-				.set("started_at", startTime)
-				.set("finished_at", finishedTime)
-				.set("est_finish", estimatedFinishedTime)
-				.set("cumulated_time", cumulatedEstimatedExecTime)
-				.upsert(workflowKeys);
+		BasicDBObject bson = new BasicDBObject()
+				.append("wfid", uuid)
+				.append("superwfid", superWfid)
+				.append("name", name)
+				.append("submitted", submitted)
+				.append("status", String.valueOf(status))
+				.append("started_at", startTime)
+				.append("finished_at", finishedTime)
+				.append("est_finish", estimatedFinishedTime)
+				.append("cumulated_time", cumulatedEstimatedExecTime);
+
+		BasicDBList taskList = new BasicDBList();
+
+		for (String tid : getTaskSet())
+		{
+			BasicDBList parents = new BasicDBList();
+			parents.addAll(getParent(tid));
+			BasicDBList children = new BasicDBList();
+			children.addAll(getChild(tid));
+
+			BasicDBObject task = new BasicDBObject("tid", tid)
+					.append("parents", parents)
+					.append("children", children);
+			taskList.add(task);
+		}
+		bson.append("tasks", taskList);
+		MongoDB.WORKFLOW.update(new BasicDBObject("wfid", uuid), bson, true, false);
 
 		if (allTasks != null)
 		{
@@ -405,27 +435,6 @@ public class Workflow implements Serializable, Savable
 			{
 				f.save();
 				Cacher.cache(f.getUUID(), f);
-			}
-		}
-
-
-
-		Queue<String> taskQueue = this.getTaskQueue();
-		while (!taskQueue.isEmpty())
-		{
-			String task = taskQueue.poll();
-			new DBRecord("workflow_task")
-					.set("wfid", this.uuid)
-					.set("tid", task)
-					.upsert(workflowTaskKeys);
-
-			for (String child : this.getChild(task))
-			{
-				new DBRecord("workflow_task_depen")
-						.set("parent", task)
-						.set("child", child)
-						.set("wfid", uuid)
-						.upsert(taskDepenKeys);
 			}
 		}
 		System.gc();
@@ -474,6 +483,7 @@ public class Workflow implements Serializable, Savable
 			}
 			allTasks = null;
 		}
+		Cacher.cache(this.uuid, this);
 	}
 
 	public boolean containsTask(String tid)

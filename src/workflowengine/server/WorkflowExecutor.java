@@ -4,6 +4,8 @@
  */
 package workflowengine.server;
 
+import com.mongodb.DBCursor;
+import com.mongodb.DBObject;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -12,19 +14,18 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import lipermi.net.Client;
-import workflowengine.communication.HostAddress;
+import workflowengine.utils.HostAddress;
 import workflowengine.monitor.EventLogger;
 import workflowengine.monitor.HTMLUtils;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
-import workflowengine.server.filemanager.DIFileManager;
+import workflowengine.server.filemanager.FileManager;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
-import workflowengine.utils.db.Cacher;
-import workflowengine.utils.db.DBRecord;
+import workflowengine.utils.db.MongoDB;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
@@ -64,7 +65,14 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		instant = this;
 		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
 		this.uri = Utils.getProp("local_hostname")+":"+Utils.getIntProp("local_port");
-		DBRecord.prepareConnection();
+		
+		//DBRecord.prepareConnection();
+		if(!MongoDB.prepare())
+		{
+			logger.log("Cannot prepare database connection.");
+			System.exit(1);
+		}
+		
 		if (registerForRMI)
 		{			
 			Utils.registerRMIServer(WorkflowExecutorInterface.class, this);
@@ -84,7 +92,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			}
 			System.out.println("Done.");
 			System.out.println("Initializing file manager...");
-			DIFileManager.get();
+			FileManager.get();
 			
 			if (hasManager)
 			{
@@ -188,10 +196,16 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	public String getTaskMappingHTML()  //throws RemoteException
 	{
 		HashMap<String, String> mapping = new HashMap<>();
-		for(DBRecord r : DBRecord.select(
-				"select tid, wkid from schedule "))
+//		for(DBRecord r : DBRecord.select(
+//				"select tid, wkid from schedule "))
+//		{
+//			mapping.put(r.get("tid"), r.get("wkid"));
+//		}
+		DBCursor cursor = MongoDB.SCHEDULE.find();
+		while(cursor.hasNext())
 		{
-			mapping.put(r.get("tid"), r.get("wkid"));
+			DBObject o = cursor.next();
+			mapping.put((String)o.get("tid"), (String)o.get("wkid"));
 		}
 		
 		StringBuilder mappingHTML = new StringBuilder();
@@ -237,6 +251,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		sb.append("<h1>System Status</h1>").append(HTMLUtils.nl2br(SystemStats.getStat()));
 		sb.append("<br/>").append("Total Processors: ").append(this.totalProcessors);
 		sb.append("<br/>").append("Manager URI: ").append(this.managerURI);
+		sb.append("<br/>").append("Average Bandwidth: ").append(avgBandwidth);
 		sb.append("<h1>Workers</h1>");
 		Set<String> workerSet = getWorkerSet();
 		if(workerSet != null)
@@ -310,34 +325,29 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	@Override
 	public void shutdown()
 	{
-		System.out.println("Shutting down...");
-		Set<String> workers = getWorkerSet();
-		if(workers != null)
+		final WorkflowExecutor thisSite = this;
+		new Thread()
 		{
-			for(String w : getWorkerSet())
-			{
-				try
-				{
-					getRemoteExecutor(w).shutdown();
-				}
-				catch (Exception ex)
-				{
-					logger.log("Cannot tell worker "+w+" to shutdown.", ex);
-				}
-			}
-		}
-		
-		new Thread(){
 			@Override
 			public void run()
 			{
-				try
+				System.out.println("Shutting down...");
+				Set<String> workers = getWorkerSet();
+				if ((thisSite instanceof SiteManager) && workers != null)
 				{
-					Thread.sleep(1000);
+					for (String w : getWorkerSet())
+					{
+						try
+						{
+							getRemoteExecutor(w).shutdown();
+						}
+						catch (Exception ex)
+						{
+							logger.log("Cannot tell worker " + w + " to shutdown.", ex);
+						}
+					}
 				}
-				catch (InterruptedException ex)
-				{}
-				Cacher.saveAll();
+//				Cacher.saveAll();
 				System.out.println("Done.");
 				System.exit(0);
 			}

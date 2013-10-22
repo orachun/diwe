@@ -14,6 +14,7 @@ import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.server.filemanager.FileManager;
+import workflowengine.utils.Threading;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
@@ -75,7 +76,7 @@ public class Worker extends WorkflowExecutor
 					logger.log("Workflow "+wf.getUUID()+" is submitted.");
 					Utils.setProp(prop);
 					wf.setSubmitted(Utils.time());
-					wf.save();
+//					wf.save();
 					wf.finalizedRemoteSubmit();
 
 					for(String tid : wf.getTaskSet())
@@ -91,7 +92,7 @@ public class Worker extends WorkflowExecutor
 					for (String inputFileUUID : wf.getInputFiles())
 					{
 						WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-	//					System.out.print("Waiting for "+wff.getName()+"...");
+						System.out.print("Waiting for "+wff.getName()+"...");
 						FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
 						String fullFilePath = thisWorker.workingDir + "/" 
 								+ wff.getName(wf.getSuperWfid());
@@ -101,7 +102,7 @@ public class Worker extends WorkflowExecutor
 						{
 							Utils.setExecutable(fullFilePath);
 						}
-	//					System.out.println("Done.");
+						System.out.println("Done.");
 					}
 					logger.log("Done.", false);
 
@@ -133,13 +134,14 @@ public class Worker extends WorkflowExecutor
 			if(se!=null)
 			{
 				//logger.log("Starting execution of task "+se.taskUUID);
-				new Thread(){
+				Threading.submitTask(new Runnable(){
 					@Override
 					public void run()
 					{
 						processors[Integer.parseInt(se.target)].exec(Task.get(se.taskUUID), se);
 					}
-				}.start();
+				});
+				
 				workingProcessors++;
 			}
 		}
@@ -154,22 +156,15 @@ public class Worker extends WorkflowExecutor
 		}
 		manager.setTaskStatus(status);
 		
-//		try
-//		{
-//			Task.get(status.taskID).setStatus(status);
-//			manager.setTaskStatus(status);
-//		}
-//		catch (RemoteException ex)
-//		{
-//			logger.log("Cannot upload task status to manager.", ex);
-//		}
 		if(status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			//Upload output files
+			Set<String> outFiles = new HashSet<>();
 			for(String wff : Task.get(status.taskID).getOutputFiles())
 			{
-				FileManager.get().outputFileCreated(WorkflowFile.get(wff).getName(status.schEntry.wfDir));
+				outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
 			}
+			FileManager.get().outputFilesCreated(outFiles);
 			
 			workingProcessors--;
 			if(!taskQueue.isEmpty())

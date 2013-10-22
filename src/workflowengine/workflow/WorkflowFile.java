@@ -4,10 +4,12 @@
  */
 package workflowengine.workflow;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 import java.io.Serializable;
 import java.util.Objects;
 import workflowengine.utils.db.Cacher;
-import workflowengine.utils.db.DBRecord;
+import workflowengine.utils.db.MongoDB;
 import workflowengine.utils.db.Savable;
 
 /**
@@ -117,31 +119,30 @@ public class WorkflowFile implements Serializable, Savable
 	
     public static WorkflowFile getInstance(Object key)
 	{
-		try
-		{
-			DBRecord record = DBRecord.select("file", new DBRecord().set("name", key.toString())).get(0);
-			return new WorkflowFile(
-					record.get("name"),
-					record.getDouble("estsize"),
-					record.get("file_type").charAt(0),
-					record.get("fid")
-					);
-		}
-		catch (IndexOutOfBoundsException e)
+		DBObject obj = MongoDB.WF_FILE.findOne(new BasicDBObject("fid", key.toString()));
+		if(obj == null)
 		{
 			return null;
 		}
+		WorkflowFile f = new WorkflowFile(
+				(String)obj.get("name"),
+				(double)obj.get("estsize"),
+				((String)obj.get("file_type")).charAt(0),
+				(String)obj.get("fid")
+				);
+		f.priority = (double)obj.get("priority");
+		return f;
 	}
 	
-	private static final String[] fileKeys = new String[]{"fid"};
 	@Override
 	public void save()
 	{
-		new DBRecord("file")
-				.set("fid", uuid)
-				.set("name", name)
-				.set("estsize", sizeInBytes)
-				.set("file_type", String.valueOf(type))
-				.upsert(fileKeys);
+		BasicDBObject obj = new BasicDBObject()
+				.append("fid", uuid)
+				.append("name", name)
+				.append("estsize", sizeInBytes)
+				.append("priority", priority)
+				.append("file_type", String.valueOf(type));
+		MongoDB.WF_FILE.update(new BasicDBObject("fid", uuid), obj, true, false);
 	}
 }

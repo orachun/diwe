@@ -51,6 +51,7 @@ public class SubmitWorkflow
 		catch(RuntimeException e)
 		{
 			System.err.println("Site manager is not found.");
+			e.printStackTrace();
 			System.exit(1);
 		}
     }

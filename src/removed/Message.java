@@ -2,11 +2,11 @@
  * To change this template, choose Tools | Templates
  * and open the template in the editor.
  */
-package workflowengine.communication.message;
+package removed;
 
 import java.io.Serializable;
 import java.util.HashMap;
-import workflowengine.communication.HostAddress;
+import workflowengine.utils.HostAddress;
 import workflowengine.utils.Utils;
 
 /**

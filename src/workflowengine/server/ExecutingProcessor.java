@@ -39,7 +39,7 @@ public class ExecutingProcessor //extends WorkflowExecutor
 		catch (IOException ex)
 		{
 			manager.setTaskStatus(ts.fail(-1, "Cannot start process: "+ex.getMessage()));
-			manager.logger.log("Cannot start proceess.", ex);
+			manager.logger.log("Cannot start process: "+ex.getMessage(), ex);
 			p = null;
 		}
 		manager.setTaskStatus(ts);
@@ -83,13 +83,13 @@ public class ExecutingProcessor //extends WorkflowExecutor
 	private String[] prepareCmd(Task t, ScheduleEntry se)
     {
         String[] cmds = t.getCmd().split(";");
-		cmds[0] = manager.getWorkingDir()+"/"+se.wfDir+"/"+cmds[0];
+		cmds[0] = manager.getWorkingDir()+"/"+se.superWfid+"/"+cmds[0];
 		return cmds;
     }
 	
 	private Process startProcess(Task t, ScheduleEntry se) throws IOException
     {
-		String dir = manager.getWorkingDir() + "/" + se.wfDir;
+		String dir = manager.getWorkingDir() + "/" + se.superWfid;
         ProcessBuilder pb = Utils.createProcessBuilder(
 				prepareCmd(t, se),
                 dir,
