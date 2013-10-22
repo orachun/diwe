@@ -18,8 +18,8 @@ import workflowengine.utils.Utils;
  */
 public class EventLogger
 {
-	private Map<String, Event> events = new HashMap<>();
-	private TreeSet<Event> eventSet = new TreeSet<>();
+	private final Map<String, Event> events = new HashMap<>();
+	private final TreeSet<Event> eventSet = new TreeSet<>();
 	private long maxStart = -1;
 	private long maxFinish = -1;
 	public static class Event implements Comparable<Event>
@@ -39,7 +39,7 @@ public class EventLogger
 		{
 			if(end == -1)
 			{
-				return -1;
+				return Utils.time()-start;
 			}
 			return end - start;
 		}
@@ -76,22 +76,33 @@ public class EventLogger
 	 */
 	public void start(String name, String desc)
 	{
-		if(events.containsKey(name))
+		synchronized (events)
 		{
-			throw new IllegalArgumentException("Event name already exists");
+			if (events.containsKey(name))
+			{
+				throw new IllegalArgumentException("Event name already exists");
+			}
 		}
 		long start = Utils.time();
 		maxStart = Math.max(start, maxStart);
 		Event e = new Event(name, desc, start);
-		events.put(name, e);
-		eventSet.add(e);
+
+		synchronized (events)
+		{
+			events.put(name, e);
+			eventSet.add(e);
+		}
 	}
 	
 	public void finish(String name)
 	{
 		long fin = Utils.time();
 		maxFinish = Math.max(fin, maxFinish);
-		events.get(name).end = fin;
+		
+		synchronized(events)
+		{
+			events.get(name).end = fin;
+		}
 	}
 
 	public long getMaxStart()

@@ -30,6 +30,7 @@ public class TaskRanker
 		//Calculate priority for each file
 		Queue<String> q = wf.getTaskQueue();
 		HashMap<String, Double> filePriority = new HashMap<>();
+//		double maxP = -10;
 		while(!q.isEmpty())
 		{
 			Task t = Task.get(q.poll());
@@ -42,11 +43,18 @@ public class TaskRanker
 				}
 				p += t.getPriority();
 				filePriority.put(fid, p);
+//				maxP = Math.max(maxP, p);
 			}
 		}
+		
 		for(Map.Entry<String, Double> entry : filePriority.entrySet())
 		{
 			WorkflowFile.get(entry.getKey()).setPriority(entry.getValue());
+		}
+		
+		for(String of : wf.getOutputFiles())
+		{
+			WorkflowFile.get(of).setPriority(Double.MAX_VALUE);
 		}
 	}
 	

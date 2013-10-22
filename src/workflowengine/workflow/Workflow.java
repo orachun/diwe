@@ -48,8 +48,9 @@ public class Workflow implements Serializable, Savable
 	protected long estimatedFinishedTime = -1;
 	protected boolean isFinished = false;
 	protected long cumulatedEstimatedExecTime = -1;
-	protected Set<Task> allTasks = null;	//All tasks for transfer over servers
-	protected Set<WorkflowFile> allFiles = null; //All files for transfer over servers
+	
+	private Set<Task> allTasks = null;	//All tasks for transfer over servers
+	private Set<WorkflowFile> allFiles = null; //All files for transfer over servers
 
 	public Workflow(String name, String uuid)
 	{
@@ -238,6 +239,10 @@ public class Workflow implements Serializable, Savable
 
 	public boolean isTaskReady(String tid, Set<String> supposeReadyTasks)
 	{
+		if(supposeReadyTasks == null || supposeReadyTasks.isEmpty())
+		{
+			return isTaskReady(tid);
+		}
 		for (String parent : this.getParent(tid))
 		{
 			if (!supposeReadyTasks.contains(parent)
@@ -445,19 +450,14 @@ public class Workflow implements Serializable, Savable
 		allTasks = new HashSet<>();
 		allFiles = new HashSet<>();
 
-		for (String t : getStartTasks())
+		for (String t : getTaskSet())
 		{
 			Task task = Task.get(t);
+			allTasks.add(task);
 			for (String f : task.getInputFiles())
 			{
 				allFiles.add(WorkflowFile.get(f));
 			}
-		}
-
-		for (String t : taskGraph.getNodeSet())
-		{
-			Task task = Task.get(t);
-			allTasks.add(task);
 			for (String f : task.getOutputFiles())
 			{
 				allFiles.add(WorkflowFile.get(f));
@@ -468,7 +468,7 @@ public class Workflow implements Serializable, Savable
 	public void finalizedRemoteSubmit()
 	{
 		if (allFiles != null)
-		{
+		{int i=0;
 			for (WorkflowFile f : allFiles)
 			{
 				Cacher.cache(f.getUUID(), f);

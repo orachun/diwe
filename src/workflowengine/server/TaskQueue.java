@@ -83,28 +83,27 @@ public class TaskQueue implements Serializable
 			taskID = iterator.next();
 			String target = taskMap.get(taskID)[WORKER_URI];
 			Workflow wf = Workflow.get(taskMap.get(taskID)[WORKFLOW_ID]);
-			if(wf.isTaskReady(taskID))
+			
+			//Get a map for ready tasks in workflows for the target worker
+			HashMap<Workflow, Set<String>> workflowReadyTasksMap = readyTaskMap.get(target);
+			if(workflowReadyTasksMap == null)
+			{
+				workflowReadyTasksMap = new HashMap<>();
+				readyTaskMap.put(target, workflowReadyTasksMap);
+			}
+				
+			//Get a task list for the workflow
+			Set<String> readyTaskSet = workflowReadyTasksMap.get(wf);
+			if(readyTaskSet == null)
+			{
+				readyTaskSet = new HashSet<>();
+				workflowReadyTasksMap.put(wf, readyTaskSet);
+			}
+			
+			if(wf.isTaskReady(taskID, readyTaskSet))
 			{
 				readyTasks.add(taskID);
-				
-				//Get a map for ready sub-workflow for the target worker
-				HashMap<Workflow, Set<String>> workflowReadyTasksMap = readyTaskMap.get(target);
-				if(workflowReadyTasksMap == null)
-				{
-					workflowReadyTasksMap = new HashMap<>();
-					readyTaskMap.put(target, workflowReadyTasksMap);
-				}
-				
-				
-				//Get a task list for the workflow
-				Set<String> readyTaskList = workflowReadyTasksMap.get(wf);
-				if(readyTaskList == null)
-				{
-					readyTaskList = new HashSet<>();
-					workflowReadyTasksMap.put(wf, readyTaskList);
-				}
-				readyTaskList.add(taskID);
-				
+				readyTaskSet.add(taskID);
 				taskMap.remove(taskID);
 			}
 		}
@@ -119,6 +118,10 @@ public class TaskQueue implements Serializable
 			for(Map.Entry<Workflow, Set<String>> workflowEntry : subWorkflowMap.entrySet())
 			{
 				Workflow oriWf = workflowEntry.getKey();
+				if(workflowEntry.getValue().isEmpty())
+				{
+					continue;
+				}
 				Workflow subWf = oriWf.getSubworkflow(oriWf.getName(), workflowEntry.getValue());
 				Set<Workflow> wfSet = readyWorkflow.get(worker);
 				if(wfSet == null)

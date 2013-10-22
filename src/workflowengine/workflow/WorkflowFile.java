@@ -90,7 +90,7 @@ public class WorkflowFile implements Serializable, Savable
             return false;
         }
         WorkflowFile f = (WorkflowFile)obj;
-        return this.name.equals(f.name);
+        return this.uuid.equals(f.uuid);
     }
 
     @Override

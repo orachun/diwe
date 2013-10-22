@@ -84,6 +84,10 @@ public class Worker extends WorkflowExecutor
 						logger.log("Task "+Task.get(tid).getName()+" is submitted.");
 					}
 
+					for(String f : wf.getOutputFiles())
+					{
+						System.out.println(WorkflowFile.get(f).getName());
+					}
 
 					Utils.mkdirs(thisWorker.getWorkingDir()+"/"+wf.getSuperWfid());
 
@@ -92,6 +96,10 @@ public class Worker extends WorkflowExecutor
 					for (String inputFileUUID : wf.getInputFiles())
 					{
 						WorkflowFile wff = WorkflowFile.get(inputFileUUID);
+						if(wff == null)
+						{
+							System.out.println(inputFileUUID);
+						}
 						System.out.print("Waiting for "+wff.getName()+"...");
 						FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
 						String fullFilePath = thisWorker.workingDir + "/" 

@@ -87,6 +87,10 @@ public class TaskStatus implements Serializable
 	{
 		return new TaskStatus(this.schEntry, STATUS_COMPLETED, 0, "", this.start, Utils.time());
 	}
+	public TaskStatus complete(int retVal, String errMsg)
+	{
+		return new TaskStatus(this.schEntry, STATUS_FAIL, retVal, errMsg, this.start, Utils.time());
+	}
 	public TaskStatus fail(int retVal, String errMsg)
 	{
 		return new TaskStatus(this.schEntry, STATUS_FAIL, retVal, errMsg, this.start, Utils.time());

@@ -169,13 +169,13 @@ public class SiteManager extends WorkflowExecutor
 			for (final Workflow wf : entry.getValue())
 			{
 				logger.log("Dispatching subworkflow to "+ workerURI+" ...");
-				wf.prepareRemoteSubmit();
+				wf.prepareRemoteSubmit();				
 				we.submit(wf, null);
 				logger.log("Done");
 				for(String tid : wf.getTaskSet())
 				{
 					setTaskStatus(TaskStatus.dispatchedStatus(tid));
-					eventLogger.start("TASK_DISPATCH:"+tid, "");
+					eventLogger.start("TASK_DISPATCH:"+Task.get(tid).getName(), "");
 				}
 			}
 		}
@@ -196,12 +196,12 @@ public class SiteManager extends WorkflowExecutor
 		
 		if(status.status == TaskStatus.STATUS_EXECUTING)
 		{
-			eventLogger.finish("TASK_DISPATCH:"+status.taskID);
-			eventLogger.start("TASK_EXEC:"+status.taskID, "");
+			eventLogger.finish("TASK_DISPATCH:"+Task.get(status.taskID).getName());
+			eventLogger.start("TASK_EXEC:"+Task.get(status.taskID).getName(), "");
 		}
 		else if(status.status == TaskStatus.STATUS_COMPLETED)
 		{
-			eventLogger.finish("TASK_EXEC:"+status.taskID);
+			eventLogger.finish("TASK_EXEC:"+Task.get(status.taskID).getName());
 			
 			//Upload output files
 			if(manager!=null && FileManager.get() instanceof ServerClientFileManager)
@@ -231,7 +231,8 @@ public class SiteManager extends WorkflowExecutor
 							{
 								if (!wf.isFileActive(fid))
 								{
-									inactiveFiles.add(fid);
+									inactiveFiles.add(WorkflowFile.get(fid)
+											.getName(status.schEntry.superWfid));
 								}
 							}
 							if (!inactiveFiles.isEmpty())

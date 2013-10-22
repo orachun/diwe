@@ -4,7 +4,10 @@
  */
 package workflowengine.server;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Scanner;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
@@ -60,9 +63,10 @@ public class ExecutingProcessor //extends WorkflowExecutor
 				}
 				else
 				{
-					ts = ts.fail(ret, "Unknown error: return value is not 0.");
+					ts = ts.complete(ret, "Warning: return value is not 0.");
 					manager.setTaskStatus(ts);
-					manager.logger.log("Task "+t.getName()+ " is failed: return value is not 0.");
+					manager.logger.log("Warning: Task "+t.getName()+ " did not return 0.");
+					
 				}
 			}
 			catch (InterruptedException ex)
@@ -93,8 +97,8 @@ public class ExecutingProcessor //extends WorkflowExecutor
         ProcessBuilder pb = Utils.createProcessBuilder(
 				prepareCmd(t, se),
                 dir,
-				dir + "/" + t.getUUID() + ".stdout",
-				dir + "/" + t.getUUID() + ".stderr", null);
+				dir + "/" + t.getName()+"_"+t.getUUID() + ".stdout",
+				dir + "/" + t.getName()+"_"+t.getUUID() + ".stderr", null);
         currentProcess = pb.start();
 		return currentProcess;
     }

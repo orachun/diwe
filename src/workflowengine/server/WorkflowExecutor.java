@@ -21,6 +21,7 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
+import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
@@ -47,7 +48,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	protected HostAddress addr;
 	protected String uri;
 	public Logger logger = Utils.getLogger();
-	protected EventLogger eventLogger;
+	public EventLogger eventLogger;
 	protected int totalProcessors = 0;
 	protected double avgBandwidth = -1;
 //	protected Set<String> notFinishedWorkflows = new HashSet<>();
@@ -264,6 +265,16 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			sb.append("</ul>");
 		}
 		sb.append("<br/>").append(eventLogger.toHTML());
+		
+//		if(FileManager.get() instanceof DIFileManager)
+//		{
+//			sb.append("<h1>Sent File Pieces</h1>")
+//					.append(((DIFileManager)FileManager.get()).getSentPieceHTML())
+//					.append("<h1>Received File Pieces</h1>")
+//					.append(((DIFileManager)FileManager.get()).getReceivePieceHTML())
+//					;
+//		}
+		
 		return sb.toString();
 	}
 	
