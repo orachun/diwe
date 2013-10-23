@@ -14,7 +14,7 @@ import java.util.concurrent.Future;
  */
 public class Threading
 {
-	private static ExecutorService exeSrv = Executors.newCachedThreadPool();
+	private static ExecutorService exeSrv = Executors.newFixedThreadPool(5);
 	
 	public static Future submitTask(Runnable task)
 	{

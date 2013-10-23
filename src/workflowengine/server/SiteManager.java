@@ -234,6 +234,14 @@ public class SiteManager extends WorkflowExecutor
 											.getName(status.schEntry.superWfid));
 								}
 							}
+							for (String fid : t.getOutputFiles())
+							{
+								if (!wf.isFileActive(fid) && !wf.getOutputFiles().contains(fid))
+								{
+									inactiveFiles.add(WorkflowFile.get(fid)
+											.getName(status.schEntry.superWfid));
+								}
+							}
 							if (!inactiveFiles.isEmpty())
 							{
 								((DIFileManager) FileManager.get()).setInactiveFile(inactiveFiles);

@@ -34,7 +34,8 @@ public class TaskQueue implements Serializable
 		
 	public synchronized void submit(Schedule s)
 	{
-		taskQueue.addAll(s.getSettings().getWorkflow().getTaskQueue());
+		
+		taskQueue.addAll(s.getSettings().getWorkflow().getTaskQueueByPriority());
 		for (Map.Entry<String, String> entry : s.getMapping().entrySet())
 		{
 			this.taskMap.put(entry.getKey(), new String[]

@@ -12,7 +12,10 @@ import java.io.FileNotFoundException;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
@@ -114,9 +117,25 @@ public class Workflow implements Serializable, Savable
 	 *
 	 * @return
 	 */
-	public Queue<String> getTaskQueue()
+	public Queue<String> getTaskQueueByOrder()
 	{
 		return taskGraph.getOrderedNodes();
+	}
+	
+	public Queue<String> getTaskQueueByPriority()
+	{
+		LinkedList<String> tasks = new LinkedList<>(getTaskSet());
+		Collections.sort(tasks, new Comparator<String>() {
+
+			@Override
+			public int compare(String o1, String o2)
+			{
+				double t1 = Task.get(o1).getPriority();
+				double t2 = Task.get(o2).getPriority();
+				return t1 > t2 ? -1 : t1 == t2 ? 0 : 1;
+			}
+		});
+		return tasks;
 	}
 
 	public double getCumulatedExecTime()

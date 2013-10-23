@@ -28,7 +28,7 @@ public class TaskRanker
 		}
 		
 		//Calculate priority for each file
-		Queue<String> q = wf.getTaskQueue();
+		Queue<String> q = wf.getTaskQueueByOrder();
 		HashMap<String, Double> filePriority = new HashMap<>();
 //		double maxP = -10;
 		while(!q.isEmpty())

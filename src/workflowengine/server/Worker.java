@@ -7,8 +7,8 @@ package workflowengine.server;
 import java.io.File;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
@@ -16,7 +16,6 @@ import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.server.filemanager.FileManager;
-import workflowengine.utils.Threading;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
@@ -36,6 +35,9 @@ public class Worker extends WorkflowExecutor
 	private String workingDir = "";
 	private int workingProcessors = 0;
 
+	private ExecutorService execThreadPool;
+	private ExecutorService setTaskStatusThreadPool;
+	
 	protected Worker()   //throws RemoteException
 	{
 		super(true, "Worker@" + Utils.getProp("local_port"));
@@ -49,6 +51,8 @@ public class Worker extends WorkflowExecutor
 		}
 
 		workingDir = Utils.getProp("working_dir");
+		execThreadPool = Executors.newFixedThreadPool(totalProcessors);
+		setTaskStatusThreadPool = Executors.newFixedThreadPool(totalProcessors);
 		manager.registerWorker(uri, totalProcessors);
 	}
 
@@ -90,25 +94,10 @@ public class Worker extends WorkflowExecutor
 
 				//Wait for all input file exists
 				logger.log("Waiting for all input files...");
-				for (String inputFileUUID : wf.getInputFiles())
-				{
-					WorkflowFile wff = WorkflowFile.get(inputFileUUID);
-					if (wff == null)
-					{
-						System.out.println(inputFileUUID);
-					}
-					System.out.print("Waiting for " + wff.getName() + "...");
-					FileManager.get().waitForFile(wff.getName(wf.getSuperWfid()));
-					String fullFilePath = thisWorker.workingDir + "/"
-							+ wff.getName(wf.getSuperWfid());
-					long size = new File(fullFilePath).length();
-					wff.setSize(size);
-					if (wff.getType() == WorkflowFile.TYPE_EXEC)
-					{
-						Utils.setExecutable(fullFilePath);
-					}
-					System.out.println("Done.");
-				}
+//				for (String inputFileUUID : wf.getInputFiles())
+//				{
+//					waitForFile(inputFileUUID, wf.getSuperWfid());
+//				}
 				logger.log("Done.", false);
 
 				logger.log("Scheduling the submitted workflow...");
@@ -126,59 +115,83 @@ public class Worker extends WorkflowExecutor
 		}.start();
 	}
 
+	private void waitForFile(String fid, String superWfid)
+	{
+		WorkflowFile wff = WorkflowFile.get(fid);
+		System.out.print("Waiting for " + wff.getName() + "...");
+		FileManager.get().waitForFile(wff.getName(superWfid));
+		String fullFilePath = this.workingDir + "/"
+				+ wff.getName(superWfid);
+		long size = new File(fullFilePath).length();
+		wff.setSize(size);
+		if (wff.getType() == WorkflowFile.TYPE_EXEC)
+		{
+			Utils.setExecutable(fullFilePath);
+		}
+		System.out.println("Done.");
+	}
+	
 	@Override
 	public int getTotalProcessors()
 	{
 		return totalProcessors;
 	}
 
+	private int dispatchingThreads = 0;
 	@Override
-	public synchronized void dispatchTask()
+	public void dispatchTask()
 	{
-		while (workingProcessors < totalProcessors && !taskQueue.isEmpty())
+		if(dispatchingThreads > 1)
 		{
-			final ScheduleEntry se = taskQueue.poll();
-			if (se != null)
+			return;
+		}
+		synchronized(this)
+		{
+			dispatchingThreads++;
+			while (workingProcessors < totalProcessors && !taskQueue.isEmpty())
 			{
-				//logger.log("Starting execution of task "+se.taskUUID);
-				Threading.submitTask(new Runnable()
+				final ScheduleEntry se = taskQueue.poll();
+				if (se != null)
 				{
-					@Override
-					public void run()
+					//logger.log("Starting execution of task "+se.taskUUID);
+					execThreadPool.submit(new Runnable()
 					{
-						processors[Integer.parseInt(se.target)].exec(Task.get(se.taskUUID), se);
-					}
-				});
-				workingProcessors++;
-			}
-			else
-			{
-				try
-				{
-					this.wait();
+						@Override
+						public void run()
+						{
+							Task t = Task.get(se.taskUUID);
+							for(String fid : t.getInputFiles())
+							{
+								waitForFile(fid, se.superWfid);
+							}
+							processors[Integer.parseInt(se.target)].exec(Task.get(se.taskUUID), se);
+						}
+					});
+					workingProcessors++;
 				}
-				catch (InterruptedException ex)
+				else
 				{
+					break;
 				}
 			}
+			dispatchingThreads--;
 		}
 	}
 
+	
+	
 	@Override
 	public void setTaskStatus(final TaskStatus status)
 	{
-		Threading.submitTask(new Runnable()
+		setTaskStatusThreadPool.submit(new Runnable()
 		{
 			@Override
 			public void run()
 			{
-				synchronized (Worker.this)
-				{
-					Task.get(status.taskID).setStatus(status);
-					Worker.this.notifyAll();
-				}
-
-				if (status.status == TaskStatus.STATUS_COMPLETED)
+				boolean taskCompleted = status.status == TaskStatus.STATUS_COMPLETED;
+				Task.get(status.taskID).setStatus(status);
+				
+				if (taskCompleted)
 				{
 					//Upload output files
 					Set<String> outFiles = new HashSet<>();
@@ -191,7 +204,7 @@ public class Worker extends WorkflowExecutor
 					workingProcessors--;
 				}
 				manager.setTaskStatus(status);
-				if (status.status == TaskStatus.STATUS_COMPLETED && !taskQueue.isEmpty())
+				if (taskCompleted && !taskQueue.isEmpty())
 				{
 					dispatchTask();
 				}

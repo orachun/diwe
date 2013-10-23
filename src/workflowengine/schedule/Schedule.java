@@ -155,7 +155,7 @@ public class Schedule
 //		}
 		
         makespan = 0;
-        Queue<String> pendingTasks = settings.getWorkflow().getTaskQueue();
+        Queue<String> pendingTasks = settings.getWorkflow().getTaskQueueByOrder();
         while (!pendingTasks.isEmpty())
         {
             String taskUUID = pendingTasks.poll();
