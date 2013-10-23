@@ -50,14 +50,31 @@ public class TaskQueue implements Serializable
 	 */
 	public synchronized ScheduleEntry poll()
 	{
-		String t = taskQueue.poll();
-		if(t == null)
+//		String t = taskQueue.poll();
+//		if(t == null)
+//		{
+//			return null;
+//		}
+//		String[] s = taskMap.remove(t);
+//		String wfDir = Workflow.get(s[WORKFLOW_ID]).getSuperWfid();
+//		return new ScheduleEntry(t, s[WORKER_URI], wfDir);
+		
+		ScheduleEntry se = null;
+		ListIterator<String> iterator = taskQueue.listIterator();
+		while(iterator.hasNext())
 		{
-			return null;
+			String tid = iterator.next();
+			String[] s = taskMap.get(tid);
+			Workflow wf = Workflow.get(s[WORKFLOW_ID]);
+			if(wf.isTaskReady(tid))
+			{
+				se = new ScheduleEntry(tid, s[WORKER_URI], wf.getSuperWfid());
+				taskQueue.remove(tid);
+				taskMap.remove(tid);
+				break;
+			}
 		}
-		String[] s = taskMap.remove(t);
-		String wfDir = Workflow.get(s[WORKFLOW_ID]).getSuperWfid();
-		return new ScheduleEntry(t, s[WORKER_URI], wfDir);
+		return se;
 	}
 	
 	

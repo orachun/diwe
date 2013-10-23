@@ -58,7 +58,7 @@ public class ServerClientFileManager extends FileManager
 	{
 		for(String name : filenames)
 		{
-			System.out.println("Uploading file "+name);
+//			System.out.println("Uploading file "+name);
 			String fullpath = Utils.getProp("working_dir") + "/" + name;
 			String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
 			SFTPClient.put(Utils.getProp("manager_host"),

@@ -11,7 +11,8 @@ import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 import com.jcraft.jsch.SftpException;
 import java.io.File;
-import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -81,40 +82,60 @@ public class SFTPClient
 	}
 	
 	
-	private static HashMap<String, SFTPClient> clients = new HashMap<>();
+	private static Map<String, SFTPClient> clients = new ConcurrentHashMap<>();
 	
 	public static void get(String host, String src, String dst)
 	{
-		try
+		int tries = 0;
+		while (tries < 5)
 		{
-			SFTPClient c = clients.get(host);
-			if(c == null)
+			try
 			{
-				c = getSFTPClient(host, Utils.getIntProp("ssh_port"), Utils.getProp("ssh_user"), Utils.getProp("ssh_pass"));
+				SFTPClient c = clients.get(host);
+				if (c == null)
+				{
+					c = getSFTPClient(host, Utils.getIntProp("ssh_port"), Utils.getProp("ssh_user"), Utils.getProp("ssh_pass"));
+					clients.put(host, c);
+				}
+				synchronized(c)
+				{
+					c.get(src, dst);
+				}
+				return;
 			}
-			c.get(src, dst);
-		}
-		catch (JSchException | SftpException ex)
-		{
-			Logger.getLogger(SFTPClient.class.getName()).log(Level.SEVERE, null, ex);
+			catch (JSchException | SftpException ex)
+			{
+				ex.printStackTrace();
+				tries++;
+			}
 		}
 	}
-	
+
 	public static void put(String host, String src, String dst)
 	{
-		try
+		int tries = 0;
+		while (tries < 5)
 		{
-			
-			SFTPClient c = clients.get(host);
-			if(c == null)
+			try
 			{
-				c = getSFTPClient(host, Utils.getIntProp("ssh_port"), Utils.getProp("ssh_user"), Utils.getProp("ssh_pass"));
+				SFTPClient c = clients.get(host);
+				if (c == null)
+				{
+					c = getSFTPClient(host, Utils.getIntProp("ssh_port"), Utils.getProp("ssh_user"), Utils.getProp("ssh_pass"));
+					clients.put(host, c);
+				}
+				synchronized(c)
+				{
+					c.put(src, dst);
+				}
+				return;
 			}
-			c.put(src, dst);
+			catch (JSchException | SftpException ex)
+			{
+				ex.printStackTrace();
+				tries++;
+			}
 		}
-		catch (JSchException | SftpException ex)
-		{
-			Logger.getLogger(SFTPClient.class.getName()).log(Level.SEVERE, null, ex);
-		}
+		
 	}
 }

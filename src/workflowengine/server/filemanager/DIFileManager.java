@@ -123,19 +123,24 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 			peers.add(Utils.getProp("manager_host") + ":" + Utils.getProp("manager_port"));
 		}
 
-
-		Utils.getPROP().put("fs_db_name",
-				Utils.getProp("fs_db_name")
-				+ "_" + Utils.getProp("local_hostname")
-				+ "_" + Utils.getProp("local_port"));
-
-		new difsys.Difsys(Utils.getProp("working_dir"), Utils.getPROP());
+		initDifsys();
+		
 		Utils.bash("rm -rf " + Utils.getProp("working_dir") + "/*", false);
 		Utils.bash("rm -rf " + Utils.getProp("fs_storage_dir") + "/*", false);
 		startListeningThread();
 		startUploadThread();
 	}
 
+	public static void initDifsys() throws FuseException
+	{
+		Utils.getPROP().put("fs_db_name",
+				Utils.getProp("fs_db_name")
+				+ "_" + Utils.getProp("local_hostname")
+				+ "_" + Utils.getProp("local_port"));
+
+		new difsys.Difsys(Utils.getProp("working_dir"), Utils.getPROP());
+	}
+	
 	private void startUploadThread()
 	{
 		if (manager != null)

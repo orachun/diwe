@@ -4,10 +4,7 @@
  */
 package workflowengine.server;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Scanner;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
@@ -34,48 +31,56 @@ public class ExecutingProcessor //extends WorkflowExecutor
 			throw new IllegalStateException("Executing other process.");
 		}
 		TaskStatus ts = TaskStatus.executingStatus(se);
-		Process p;
-		try
+		int tries = 0;
+		while(ts.status != TaskStatus.STATUS_COMPLETED && tries < 5)
 		{
-			p = startProcess(t, se);
-		}
-		catch (IOException ex)
-		{
-			manager.setTaskStatus(ts.fail(-1, "Cannot start process: "+ex.getMessage()));
-			manager.logger.log("Cannot start process: "+ex.getMessage(), ex);
-			p = null;
-		}
-		manager.setTaskStatus(ts);
-		
-		if(p != null)
-		{
-			manager.logger.log("Task "+t.getName()+ " is started.");
-			//manager.logger.log("CMD: "+t.getCmd());
+			Process p;
 			try
 			{
-				int ret = p.waitFor();
-				currentProcess = null;
-				if(ret == 0)
-				{
-					ts = ts.complete();
-					manager.setTaskStatus(ts);
-					manager.logger.log("Task "+t.getName()+ " is completed.");
-				}
-				else
-				{
-					ts = ts.complete(ret, "Warning: return value is not 0.");
-					manager.setTaskStatus(ts);
-					manager.logger.log("Warning: Task "+t.getName()+ " did not return 0.");
-					
-				}
-			}
-			catch (InterruptedException ex)
-			{
-				ts = ts.fail(-1, "Waiting is interrupted before process ends.");
+				p = startProcess(t, se);
 				manager.setTaskStatus(ts);
-				manager.logger.log("Task "+t.getName()+ " is failed: Waiting is interrupted before process ends.");
 			}
+			catch (IOException ex)
+			{
+				ts = ts.fail(-1, "Cannot start process: "+ex.getMessage());
+				manager.logger.log("Cannot start process: "+ex.getMessage(), ex);
+				p = null;
+			}
+
+			//If the process can be started
+			if(p != null)
+			{
+				manager.logger.log("Task "+t.getName()+ " is started.");
+				//manager.logger.log("CMD: "+t.getCmd());
+				try
+				{
+					int ret = p.waitFor();
+					currentProcess = null;
+					if(ret == 0)
+					{
+						ts = ts.complete();
+//						manager.setTaskStatus(ts);
+						manager.logger.log("Task "+t.getName()+ " is completed.");
+					}
+					else
+					{
+						ts = ts.fail(ret, "Error: return value is not 0.");
+//						manager.setTaskStatus(ts);
+						manager.logger.log("Error: Task "+t.getName()+ " did not return 0.");
+
+					}
+				}
+				catch (InterruptedException ex)
+				{
+					ts = ts.fail(-1, "Waiting is interrupted before process ends.");
+//					manager.setTaskStatus(ts);
+					manager.logger.log("Task "+t.getName()
+							+ " is failed: Waiting is interrupted before process ends.");
+				}
+			}
+			tries++;
 		}
+		manager.setTaskStatus(ts);
 		return ts;
 	}
 
