@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Diwe by orachun</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header class="without-description">
+        <h1>Diwe</h1>
+        <p></p>
+        <p class="view"><a href="https://github.com/orachun/diwe">View the Project on GitHub <small>orachun/diwe</small></a></p>
+        <ul>
+          <li><a href="https://github.com/orachun/diwe/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/orachun/diwe/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/orachun/diwe">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a name="a-framework-for-data-intensive-workflow-execution-on-multiple-execution-sites" class="anchor" href="#a-framework-for-data-intensive-workflow-execution-on-multiple-execution-sites"><span class="octicon octicon-link"></span></a>A Framework for Data-Intensive Workflow Execution on Multiple Execution Sites</h1>
+
+<p>(in progress)</p>
+
+<div>
+<b>Author:</b> Orachun Udokasemsub </div><div>Computer Engineering Department, King Mongkut's University of Technology Thonburi (KMUTT), Thailand</div>
+
+<div>
+<b>Advisors:</b> </div><div>1. Dr. Tiranee Achalakul</div><div>Computer Engineering Department, King Mongkut's University of Technology Thonburi (KMUTT), Thailand
+</div><div>2. Dr.Xiaorong Li</div><div>Institute of High Performance Computing (IHPC), Singapore</div><div>
+</div>
+
+<h2>
+<a name="abstract" class="anchor" href="#abstract"><span class="octicon octicon-link"></span></a>Abstract</h2>
+
+<div>
+<div>Cloud computing is an emerging technology that combines large amount of computer resources into a virtual place so as to provide the on-demand computing facility to users. Scientific simulations are the applications that consist of a huge number of the complex computational tasks described by a workflow using directed acyclic graphs (DAG). This workflow can be submitted to a cloud system for execution with a large amount of computing resources. In order to optimize the performance of the</div>
+<div>resource provisioning process on cloud, a workflow scheduling algorithm is needed. In addition, the rapid growth of global data is currently noticed. Thus, many data management challenges of scientific workflow executions must be taken into account.</div>
+<div>In this research, the framework based on Artificial Bee Colony algorithm to execute data-intensive scientific workflow applications is proposed. The framework includes partitioning algorithm, scheduling algorithm, and file management techniques. The</div>
+<div>execution will be run on multiple execution sites by partitioning the workflow into each execution site. Moreover, data transferring across execution sites will be managed by a technique in the proposed framework in order to reduce additional time caused by data</div>
+<div>transferring. Finally, two experiments were designed to be a measure of the performance gained by the proposed framework. It is expected that the proposed framework will execute a submitted workflow with better makespan.</div>
+</div><div>
+</div>
+
+<h2>
+<a name="dependencies" class="anchor" href="#dependencies"><span class="octicon octicon-link"></span></a>Dependencies</h2>
+
+<ul>
+<li>Java SE</li>
+  <li>Mongo DB</li>
+  <li>DIFSYS : https://github.com/orachun/difsys</li>
+</ul><h2>
+<a name="details" class="anchor" href="#details"><span class="octicon octicon-link"></span></a>Details</h2>
+
+<div>
+  The framework consists of two servers: Site Manager and Worker. Site Manager manage the executing site by scheduling submitted workflows and dispatch into its workers, which can be the other site managers or workers. The worker receives tasks dispatched from its site manager, schedules these tasks, and executes on local processor.
+  The intermediate files of the submitted workflows are transferred by the designed peer-to-peer method in order to utilize all available network bandwidth within the execution site.
+</div>
+      </section>
+    </div>
+    <footer>
+      <p>Project maintained by <a href="https://github.com/orachun">orachun</a></p>
+      <p>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></p>
+    </footer>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
