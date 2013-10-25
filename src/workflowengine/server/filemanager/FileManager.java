@@ -20,5 +20,5 @@ public abstract class FileManager
 	
 	public abstract void waitForFile(String name);
 	public abstract void outputFilesCreated(Set<String> fname);
-	
+	public abstract void shutdown();
 }

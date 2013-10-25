@@ -66,5 +66,11 @@ public class ServerClientFileManager extends FileManager
 					remoteWorkingDir + "/" + name);
 		}
 	}
+	
+	@Override
+	public void shutdown()
+	{
+		
+	}
 
 }

@@ -78,7 +78,17 @@ public class ExecutorNetwork
 	private double linkSpdTest(String to)
 	{
 		//TODO: implement this
-		return 10;
+//		String remoteHost = to.split(":")[0];
+//		double total = 0;
+//		Utils.bash("truncate --size 1M 1mb.dat", true);
+//		for(int i=0;i<1;i++)
+//		{
+//			long startTime = Utils.timeMillis();
+//			Utils.bash("nc "+remoteHost+" 19191 < 1mb.dat", true);
+//			total += 102400000.0/(Utils.timeMillis()-startTime);
+//		}
+//		return total/1.0;
+		return 1;
 	}
 	
 	public double getLinkSpd(String to)

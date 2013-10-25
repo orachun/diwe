@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import lipermi.net.Client;
+import org.jfree.chart.JFreeChart;
 import workflowengine.utils.HostAddress;
 import workflowengine.monitor.EventLogger;
 import workflowengine.monitor.HTMLUtils;
@@ -21,7 +22,6 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
-import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
@@ -60,6 +60,20 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 
 	protected WorkflowExecutor(boolean registerForRMI, String name)  //throws RemoteException
 	{
+//		new Thread()
+//		{
+//			@Override
+//			public void run()
+//			{
+//				while(true)
+//				{
+//					Utils.bash("nc -l "+Utils.getProp("local_hostname")+" 19191 > /dev/null", true);
+//				}
+//			}
+//		}.start();
+		
+		
+		
 		eventLogger = new EventLogger();
 		eventLogger.start("EXEC_INIT", "Initializing executor");
 		Utils.mkdirs(Utils.getProp("working_dir"));
@@ -104,6 +118,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			System.out.println("Done.");
 		}
 		eventLogger.finish("EXEC_INIT");
+		
+		
 	}
 	
 	public static WorkflowExecutor get()
@@ -252,7 +268,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		sb.append("<h1>System Status</h1>").append(HTMLUtils.nl2br(SystemStats.getStat()));
 		sb.append("<br/>").append("Total Processors: ").append(this.totalProcessors);
 		sb.append("<br/>").append("Manager URI: ").append(this.managerURI);
-		sb.append("<br/>").append("Average Bandwidth: ").append(avgBandwidth);
+		sb.append("<br/>").append("Average Bandwidth: ").append(getAvgBandwidth());
 		sb.append("<h1>Workers</h1>");
 		Set<String> workerSet = getWorkerSet();
 		if(workerSet != null)
@@ -343,6 +359,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			public void run()
 			{
 				System.out.println("Shutting down...");
+				FileManager.get().shutdown();
 				Set<String> workers = getWorkerSet();
 				if ((thisSite instanceof SiteManager) && workers != null)
 				{
@@ -379,6 +396,12 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		return Utils.execAndWait(new String[]{
 			"bash", "-c", cmd
 		}, true);
+	}
+
+	@Override
+	public EventLogger getEventLog()
+	{
+		return eventLogger;
 	}
 	
 	

@@ -14,4 +14,5 @@ public interface FC
 {
     public double getFitness(Schedule sch);
     public Schedule getBetterSchedule(Schedule s1, Schedule s2);
+	public boolean isScheduleBetter(Schedule s1, Schedule s2);
 }

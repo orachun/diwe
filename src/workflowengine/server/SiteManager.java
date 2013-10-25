@@ -196,6 +196,13 @@ public class SiteManager extends WorkflowExecutor
 		{
 			eventLogger.finish("TASK_DISPATCH:" + Task.get(status.taskID).getName() + status.taskID);
 			eventLogger.start("TASK_EXEC:" + Task.get(status.taskID).getName() + status.taskID, "");
+			
+			//Inactivate file transferring if the file is not needed by any
+			//incompleted tasks
+			if (FileManager.get() instanceof DIFileManager)
+			{
+				deactivateFiles(t, status.schEntry.superWfid, true, false);
+			}
 		}
 		else if (status.status == TaskStatus.STATUS_COMPLETED)
 		{
@@ -217,38 +224,7 @@ public class SiteManager extends WorkflowExecutor
 			//incompleted tasks
 			if (FileManager.get() instanceof DIFileManager)
 			{
-				Threading.submitTask(new Runnable()
-				{
-					@Override
-					public void run()
-					{
-						Workflow wf = Workflow.get(status.schEntry.superWfid);
-						if (wf != null)
-						{
-							Set<String> inactiveFiles = new HashSet<>();
-							for (String fid : t.getInputFiles())
-							{
-								if (!wf.isFileActive(fid))
-								{
-									inactiveFiles.add(WorkflowFile.get(fid)
-											.getName(status.schEntry.superWfid));
-								}
-							}
-							for (String fid : t.getOutputFiles())
-							{
-								if (!wf.isFileActive(fid) && !wf.getOutputFiles().contains(fid))
-								{
-									inactiveFiles.add(WorkflowFile.get(fid)
-											.getName(status.schEntry.superWfid));
-								}
-							}
-							if (!inactiveFiles.isEmpty())
-							{
-								((DIFileManager) FileManager.get()).setInactiveFile(inactiveFiles);
-							}
-						}
-					}
-				});
+				deactivateFiles(t, status.schEntry.superWfid, true, true);
 			}
 		}
 
@@ -264,6 +240,48 @@ public class SiteManager extends WorkflowExecutor
 		}
 	}
 
+	private void deactivateFiles(final Task t, final String superWfid, final boolean input, final boolean output)
+	{
+		Threading.submitTask(new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				Workflow wf = Workflow.get(superWfid);
+				if (wf != null)
+				{
+					Set<String> inactiveFiles = new HashSet<>();
+					if(input)
+					{
+						for (String fid : t.getInputFiles())
+						{
+							if (!wf.isFileActive(fid))
+							{
+								inactiveFiles.add(WorkflowFile.get(fid)
+										.getName(superWfid));
+							}
+						}
+					}
+					if(output)
+					{
+						for (String fid : t.getOutputFiles())
+						{
+							if (!wf.isFileActive(fid) && !wf.getOutputFiles().contains(fid))
+							{
+								inactiveFiles.add(WorkflowFile.get(fid)
+										.getName(superWfid));
+							}
+						}
+					}
+					if (!inactiveFiles.isEmpty())
+					{
+						((DIFileManager) FileManager.get()).setInactiveFile(inactiveFiles);
+					}
+				}
+			}
+		});
+	}
+	
 	@Override
 	public void registerWorker(String uri, int totalProcessors)
 	{
@@ -306,8 +324,18 @@ public class SiteManager extends WorkflowExecutor
 			{
 				((DIFileManager) FileManager.get()).workerJoined(uri);
 				Set<String> peers = new HashSet<>(getWorkerSet());
-				peers.add(uri);
-				((DIFileManager) FileManager.get()).setPeerSet(uri, peers);
+				peers.add(this.uri);
+				for(String p : peers)
+				{
+					if(p.equals(uri))
+					{
+						((DIFileManager) FileManager.get()).setPeerSet(p, peers);
+					}
+					else
+					{
+						((DIFileManager) FileManager.get()).addPeer(p, uri);
+					}
+				}
 			}
 		}
 		if (manager != null)
@@ -333,12 +361,15 @@ public class SiteManager extends WorkflowExecutor
 			WorkflowExecutorInterface worker;
 			worker = WorkflowExecutor.getRemoteExecutor(w);
 			double workerBW = worker.getAvgBandwidth();
+			
+			//If worker is a site manager
 			if (workerBW != -1)
 			{
 				int workerProcs = worker.getTotalProcessors();
 				sum += workerBW * workerProcs;
 				count += workerProcs;
 			}
+			
 			sum += execNetwork.getLinkSpd(w);
 			count++;
 		}

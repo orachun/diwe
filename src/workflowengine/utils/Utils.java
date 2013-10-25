@@ -19,6 +19,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
+import java.lang.reflect.Array;
 import java.net.Socket;
 import java.util.Collection;
 import java.util.HashMap;
@@ -155,6 +156,11 @@ public class Utils
     {
         return (long) Math.round(System.currentTimeMillis() / 1000.0);
     }
+	
+	public static long timeMillis()
+	{
+		return System.currentTimeMillis();
+	}
 
     public static String uuid()
     {
@@ -659,5 +665,12 @@ public class Utils
 	public static long timerDuration(String key)
 	{
 		return time()-timerStartTime.get(key);
+	}
+	
+	public static int[] cloneIntArray(int[] arr)
+	{
+		int[] newArr = new int[arr.length];
+		System.arraycopy(arr, 0, newArr, 0, arr.length);
+		return newArr;
 	}
 }

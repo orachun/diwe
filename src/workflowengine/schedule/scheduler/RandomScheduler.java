@@ -18,7 +18,7 @@ public class RandomScheduler implements Scheduler
     public Schedule getSchedule(SchedulingSettings settings)
     {
         Schedule s = new Schedule(settings);
-		String[] sites = settings.siteArray();
+		String[] sites = settings.getSiteArray();
 		Random r = new Random();
 		for(String taskUUID: settings.getTaskUUIDSet())
 		{

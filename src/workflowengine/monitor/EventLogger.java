@@ -4,31 +4,40 @@
  */
 package workflowengine.monitor;
 
+import java.io.Serializable;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
-import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.JFreeChart;
+import org.jfree.data.gantt.Task;
+import org.jfree.data.gantt.TaskSeries;
+import org.jfree.data.gantt.TaskSeriesCollection;
+import org.jfree.data.time.SimpleTimePeriod;
 import workflowengine.utils.Utils;
 
 /**
  *
  * @author orachun
  */
-public class EventLogger
+public class EventLogger implements Serializable
 {
-	private final Map<String, Event> events = new HashMap<>();
-	private final TreeSet<Event> eventSet = new TreeSet<>();
+	private final Map<String, Event> events = new ConcurrentHashMap<>();
+	private final LinkedList<Event> eventList = new LinkedList<>();
 	private long maxStart = -1;
 	private long maxFinish = -1;
-	public static class Event implements Comparable<Event>
+	public static class Event implements Serializable
 	{ 
 		String name;
 		String desc;
 		long start;
 		long end;
-		public Event(String name, String desc, long start)
+		public Event(String name, String desc, long start) 
 		{
 			this.name = name;
 			this.start = start;
@@ -59,11 +68,6 @@ public class EventLogger
 			return end;
 		}
 
-		@Override
-		public int compareTo(Event o)
-		{
-			return start < o.start? -1 : start == o.start ? 0 : 1;
-		}
 		
 		
 		
@@ -76,21 +80,19 @@ public class EventLogger
 	 */
 	public void start(String name, String desc)
 	{
-		synchronized (events)
+		if (events.containsKey(name))
 		{
-			if (events.containsKey(name))
-			{
-				throw new IllegalArgumentException("Event name already exists");
-			}
+			throw new IllegalArgumentException("Event name already exists");
 		}
+		
 		long start = Utils.time();
 		maxStart = Math.max(start, maxStart);
 		Event e = new Event(name, desc, start);
 
-		synchronized (events)
+		events.put(name, e);
+		synchronized (eventList)
 		{
-			events.put(name, e);
-			eventSet.add(e);
+			eventList.add(e);
 		}
 	}
 	
@@ -119,20 +121,18 @@ public class EventLogger
 	{
 		DateFormat df = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM);
 		
-		long start = eventSet.first().start;
-		long end = eventSet.last().end == -1 ? Utils.time() : eventSet.last().end;
+		long start = eventList.getFirst().start;
+		long end = eventList.getLast().end == -1 ? Utils.time() : eventList.getLast().end;
 		
 		StringBuilder sb = new StringBuilder();
-		Iterator<Event> it = eventSet.iterator();
 		sb.append("<h1>Event Log</h1>");
 		sb.append("<div>From ")
 				.append(df.format(new Date(start*1000)))
 				.append(" to ")
 				.append(df.format(new Date(end*1000)))
 				.append(" (").append(end-start).append("s)");
-		while(it.hasNext())
+		for(Event e : eventList)
 		{
-			Event e = it.next();
 			sb.append("<div class=\"event-item\">[")
 					.append(df.format(new Date(e.start*1000)))
 					.append("-")
@@ -145,6 +145,34 @@ public class EventLogger
 					.append("</div>");
 		}
 		return sb.toString();
+	}
+	
+	public JFreeChart toGanttChart()
+	{
+		long end = (Math.max(maxStart, maxFinish))+60;
+		
+		TaskSeries s1 = new TaskSeries("Events");
+		
+		for(Event e : eventList)
+		{
+			s1.add(new Task(e.name,new SimpleTimePeriod(
+					e.start * 1000,
+					e.end == -1 ? end*1000 : e.end*1000
+					)));
+		}
+		TaskSeriesCollection collection = new TaskSeriesCollection();
+        collection.add(s1);
+		
+		JFreeChart chart = ChartFactory.createGanttChart(
+            "Event Chart",
+            "", "", collection
+        );
+		return chart;
+	}
+	
+	public int size()
+	{
+		return eventList.size();
 	}
 }
 

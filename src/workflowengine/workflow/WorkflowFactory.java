@@ -132,6 +132,7 @@ public class WorkflowFactory
 					task.addInputFile(execFile);
 
 					task.setCmd(cmd);
+					wf.taskGraph.addNode(task.getUUID());
 				}
 			}
 

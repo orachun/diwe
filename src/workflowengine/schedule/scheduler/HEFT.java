@@ -31,8 +31,8 @@ public class HEFT implements Scheduler
     public Schedule getSchedule(SchedulingSettings settings)
     {
         this.settings = settings;
-		tasks = settings.taskArray();
-		sites = settings.siteArray();
+		tasks = settings.getTaskArray();
+		sites = settings.getSiteArray();
         avgExecTime = new double[tasks.length];
         avgCommTime = new double[tasks.length][tasks.length];
         rank = new double[tasks.length];

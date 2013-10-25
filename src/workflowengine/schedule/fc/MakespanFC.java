@@ -33,4 +33,9 @@ public class MakespanFC implements FC
         return s1.getMakespan() < s2.getMakespan() ? s1 : s2;
     }
     
+	@Override
+	public boolean isScheduleBetter(Schedule s1, Schedule s2)
+	{
+		return s1 == getBetterSchedule(s1, s2);
+	}
 }

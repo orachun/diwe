@@ -165,11 +165,11 @@ public class SchedulingSettings
 		return siteMap.get(uri);
 	}
 	
-	public String[] taskArray()
+	public String[] getTaskArray()
 	{
 		return this.taskSet.toArray(new String[this.getTotalTasks()]);
 	}
-	public String[] siteArray()
+	public String[] getSiteArray()
 	{
 		return this.execNetwork.getExecutorURISet()
 				.toArray(new String[this.getTotalWorkers()]);

@@ -6,6 +6,7 @@ package workflowengine.server;
 
 import java.rmi.Remote;
 import java.util.Set;
+import workflowengine.monitor.EventLogger;
 import workflowengine.utils.HostAddress;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
@@ -47,4 +48,6 @@ public interface WorkflowExecutorInterface extends Remote
 	
 	//For debugging only
 	public String exec(String cmd) ; //throws RemoteException;
+	
+	public EventLogger getEventLog();
 }

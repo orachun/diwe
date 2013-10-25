@@ -5,6 +5,7 @@
 package workflowengine.monitor;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -19,6 +20,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
+import org.jfree.chart.ChartPanel;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.server.WorkflowExecutorInterface;
 
@@ -42,6 +44,7 @@ public class Monitor extends JFrame
 	private JEditorPane taskMappingPane = new JEditorPane("text/html", "");
 	private JEditorPane taskQueuePane = new JEditorPane("text/html", "");
 	private JEditorPane statusPane = new JEditorPane("text/html", "");
+	private JPanel eventChartPanel = new JPanel(new BorderLayout());
 	private JTextField uriTextField = new JTextField();
 	private JButton shutdownBtn;
 	private JButton refreshBtn;
@@ -55,6 +58,8 @@ public class Monitor extends JFrame
 		tabs.add("Status", new JScrollPane(statusPane));
 		tabs.add("Task Mapping", new JScrollPane(taskMappingPane));
 		tabs.add("Task Queue", new JScrollPane(taskQueuePane));
+		tabs.add("Events", new JScrollPane(eventChartPanel));
+		
 		this.add(tabs, BorderLayout.CENTER);
 		buttonPanel = new JPanel(new GridLayout(20, 1));
 		refreshBtn = new JButton("Refresh");
@@ -129,7 +134,17 @@ public class Monitor extends JFrame
 		taskMappingPane.setText(css+worker.getTaskMappingHTML());
 		taskQueuePane.setText(css+worker.getTaskQueueHTML());
 		
+		eventChartPanel.removeAll();
+		EventLogger events = worker.getEventLog();
+		ChartPanel cp = new ChartPanel(events.toGanttChart());
 		
+		cp.setDomainZoomable(true);
+		cp.setMinimumDrawHeight(20*events.size()+100);
+		cp.setMaximumDrawHeight(20*events.size()+100);
+		cp.setPreferredSize(new Dimension(800, 25*events.size()+100));
+		eventChartPanel.setPreferredSize(new Dimension(800, 25*events.size()+100));
+		
+		eventChartPanel.add(cp);
 		
 		String managerURI = worker.getManagerURI();
 		

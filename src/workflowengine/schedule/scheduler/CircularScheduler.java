@@ -18,8 +18,8 @@ public class CircularScheduler implements Scheduler
     public Schedule getSchedule(SchedulingSettings settings)
     {
         Schedule s = new Schedule(settings);
-		String[] sites = settings.siteArray();
-		String[] tasks = settings.taskArray();
+		String[] sites = settings.getSiteArray();
+		String[] tasks = settings.getTaskArray();
 		
         for (int i = 0; i < tasks.length; i++)
 		{
