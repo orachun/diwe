@@ -6,19 +6,27 @@ package workflowengine.server;
 
 import java.io.IOException;
 import workflowengine.schedule.ScheduleEntry;
+import workflowengine.server.filemanager.FileServer;
+import workflowengine.utils.Checkpointing;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
 import workflowengine.utils.Utils;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
  * @author orachun
  */
-public class ExecutingProcessor //extends WorkflowExecutor
+public class ExecutingProcessor
 {
 	private Worker manager;
 	private Process currentProcess;
-	public ExecutingProcessor(Worker manager)  //throws RemoteException
+	private Task currentTask;
+	private ScheduleEntry currentSE;
+	private long usage = 0;
+	private final Object SUSPEND_LOCK = new Object();
+	private boolean isSuspended = false;
+	public ExecutingProcessor(Worker manager) 
 	{
 		super();
 		this.manager = manager;
@@ -30,57 +38,77 @@ public class ExecutingProcessor //extends WorkflowExecutor
 		{
 			throw new IllegalStateException("Executing other process.");
 		}
+		long start = Utils.time();
+		this.currentTask = t;
+		this.currentSE = se;
 		TaskStatus ts = TaskStatus.executingStatus(se);
 		int tries = 0;
-		while(ts.status != TaskStatus.STATUS_COMPLETED && tries < 5)
+		while (ts.status != TaskStatus.STATUS_COMPLETED && tries < 5)
 		{
-			Process p;
 			try
 			{
-				p = startProcess(t, se);
+				synchronized (SUSPEND_LOCK)
+				{
+					isSuspended = false;
+					currentProcess = startProcess(t, se);
+				}
 				manager.setTaskStatus(ts);
 			}
 			catch (IOException ex)
 			{
-				ts = ts.fail(-1, "Cannot start process: "+ex.getMessage());
-				manager.logger.log("Cannot start process: "+ex.getMessage(), ex);
-				p = null;
+				ts = ts.fail(-1, "Cannot start process: " + ex.getMessage());
+				manager.logger.log("Cannot start process: " + ex.getMessage(), ex);
+				currentProcess = null;
 			}
 
 			//If the process can be started
-			if(p != null)
+			if(currentProcess != null)
 			{
 				manager.logger.log("Task "+t.getName()+ " is started.");
-				//manager.logger.log("CMD: "+t.getCmd());
+//				manager.logger.log("CMD: "+t.getCmd());
 				try
 				{
-					int ret = p.waitFor();
-					currentProcess = null;
-					if(ret == 0)
+					int ret = currentProcess.waitFor();
+					
+					synchronized(SUSPEND_LOCK)
 					{
-						ts = ts.complete();
-//						manager.setTaskStatus(ts);
-						manager.logger.log("Task "+t.getName()+ " is completed.");
-					}
-					else
-					{
-						ts = ts.fail(ret, "Error: return value is not 0.");
-//						manager.setTaskStatus(ts);
-						manager.logger.log("Error: Task "+t.getName()+ " did not return 0.");
 
+						if(isSuspended)
+						{
+							manager.logger.log("Task "+t.getName()+ " is suspended.");
+							ts = ts.suspend();
+							isSuspended = false;
+							break;
+						}
+						
+						if(ret == 0)
+						{
+							ts = ts.complete();
+							manager.logger.log("Task "+t.getName()+ " is completed.");
+						}
+						else
+						{
+							ts = ts.fail(ret, "Error: return value is not 0.");
+							manager.logger.log("Error: Task "+t.getName()+ " did not return 0.");
+						}
 					}
 				}
 				catch (InterruptedException ex)
 				{
 					ts = ts.fail(-1, "Waiting is interrupted before process ends.");
-//					manager.setTaskStatus(ts);
 					manager.logger.log("Task "+t.getName()
 							+ " is failed: Waiting is interrupted before process ends.");
 				}
 			}
 			tries++;
 		}
+		
 		manager.setTaskStatus(ts);
+		
+		usage += (Utils.time() - start);
+		currentProcess = null;
+		currentTask = null;
+		currentSE = null;
 		return ts;
 	}
 
@@ -91,8 +119,26 @@ public class ExecutingProcessor //extends WorkflowExecutor
 	
 	private String[] prepareCmd(Task t, ScheduleEntry se)
     {
-        String[] cmds = t.getCmd().split(";");
-		cmds[0] = manager.getWorkingDir()+"/"+se.superWfid+"/"+cmds[0];
+		String taskDir = manager.getWorkingDir() + "/" + se.superWfid;
+		String prefix;
+		if(t.getStatus().status == TaskStatus.STATUS_SUSPENDED)
+		{
+			prefix = Checkpointing.getResumeCmdPrefix(taskDir, t.getUUID());
+			WorkflowFile ckptFile = WorkflowFile.get(t.getCkptFid());
+			Utils.bash("tar -xzf "+taskDir+'/'+ckptFile.getName()+" -C "+taskDir, false);
+		}
+		else
+		{
+			prefix = Checkpointing.getExecCmdPrefix(taskDir, t.getUUID());
+		}
+		String[] cmds = (prefix	+taskDir + "/" + t.getCmd()).split(";");
+		
+//		for(String c : cmds)
+//		{
+//			System.out.printf("%s ", c);
+//		}
+//		System.out.println();
+		
 		return cmds;
     }
 	
@@ -108,11 +154,48 @@ public class ExecutingProcessor //extends WorkflowExecutor
 		return currentProcess;
     }
 
-	public void stop()  //throws RemoteException
+	public void stop()
 	{
 		currentProcess.destroy();
 	}
 
-	
+	public long getUsage()
+	{
+		return usage;
+	}
+
+	public WorkflowFile suspend(String tid)
+	{
+		if(currentProcess != null && currentTask.getUUID().equals(tid))
+		{
+			synchronized(SUSPEND_LOCK)
+			{
+				System.out.println("Suspending current task...");
+				if(isSuspended)
+				{
+					return null;
+				}
+				isSuspended = true;
+				Checkpointing.checkpoint();
+				
+				currentProcess.destroy();
+				
+				String taskDir = manager.getWorkingDir() + '/' + this.currentSE.superWfid;
+				String ckptDir = Checkpointing.getCkptDir(taskDir, tid);
+				String ckptFileName = taskDir + '/' + tid + "_ckpt.tar";
+				Utils.bash("tar -zcf " + ckptFileName + ' ' + ckptDir, false);
+
+				WorkflowFile ckptFile = new WorkflowFile(tid + "_ckpt.tar", 
+						Utils.getFileLength(ckptFileName), 
+						WorkflowFile.TYPE_CHECKPOINT_FILE, 
+						Utils.uuid()
+						);
+				System.out.println("Done.");
+				return ckptFile;
+			}
+		}
+		
+		return null;
+	}
 	
 }

@@ -19,6 +19,7 @@ public class TaskStatus implements Serializable
     public static final char STATUS_EXECUTING = 'E';
     public static final char STATUS_COMPLETED = 'C';
     public static final char STATUS_FAIL = 'F';
+    public static final char STATUS_SUSPENDED = 'S';
 	
 	public final String taskID;
 	public final char status;
@@ -83,6 +84,10 @@ public class TaskStatus implements Serializable
 		return new TaskStatus(ts.schEntry, STATUS_FAIL, retVal, errMsg, ts.start, Utils.time());
 	}
 	
+	public TaskStatus suspend()
+	{
+		return new TaskStatus(this.schEntry, STATUS_SUSPENDED, -1, "", this.start, -1);
+	}
 	public TaskStatus complete()
 	{
 		return new TaskStatus(this.schEntry, STATUS_COMPLETED, 0, "", this.start, Utils.time());

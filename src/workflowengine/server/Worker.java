@@ -5,10 +5,15 @@
 package workflowengine.server;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
@@ -16,6 +21,7 @@ import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.server.filemanager.FileManager;
+import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
@@ -32,11 +38,12 @@ public class Worker extends WorkflowExecutor
 	private TaskQueue taskQueue = new TaskQueue();
 	private ExecutorNetwork execNetwork;
 	private ExecutingProcessor[] processors;
-	private String workingDir = "";
 	private int workingProcessors = 0;
 
 	private ExecutorService execThreadPool;
 	private ExecutorService setTaskStatusThreadPool;
+	
+	private Map<String, String> runningTasks = new ConcurrentHashMap<>(); // task -> processor
 	
 	protected Worker()   //throws RemoteException
 	{
@@ -50,7 +57,6 @@ public class Worker extends WorkflowExecutor
 			processors[i] = new ExecutingProcessor(this);
 		}
 
-		workingDir = Utils.getProp("working_dir");
 		execThreadPool = Executors.newFixedThreadPool(totalProcessors);
 		setTaskStatusThreadPool = Executors.newFixedThreadPool(totalProcessors);
 		manager.registerWorker(uri, totalProcessors);
@@ -94,10 +100,6 @@ public class Worker extends WorkflowExecutor
 
 				//Wait for all input file exists
 				logger.log("Waiting for all input files...");
-//				for (String inputFileUUID : wf.getInputFiles())
-//				{
-//					waitForFile(inputFileUUID, wf.getSuperWfid());
-//				}
 				logger.log("Done.", false);
 
 				logger.log("Scheduling the submitted workflow...");
@@ -120,7 +122,7 @@ public class Worker extends WorkflowExecutor
 		WorkflowFile wff = WorkflowFile.get(fid);
 		System.out.print("Waiting for " + wff.getName() + "...");
 		FileManager.get().waitForFile(wff.getName(superWfid));
-		String fullFilePath = this.workingDir + "/"
+		String fullFilePath = this.getWorkingDir() + "/"
 				+ wff.getName(superWfid);
 		long size = new File(fullFilePath).length();
 		wff.setSize(size);
@@ -202,7 +204,14 @@ public class Worker extends WorkflowExecutor
 					FileManager.get().outputFilesCreated(outFiles);
 
 					workingProcessors--;
+					runningTasks.remove(status.taskID);
 				}
+				else if(status.status == TaskStatus.STATUS_EXECUTING)
+				{
+					runningTasks.put(status.taskID, status.schEntry.target);
+				}
+				
+				status.schEntry.target = Worker.this.uri;
 				manager.setTaskStatus(status);
 				if (taskCompleted && !taskQueue.isEmpty())
 				{
@@ -224,11 +233,6 @@ public class Worker extends WorkflowExecutor
 		return taskQueue.toHTML();
 	}
 
-	@Override
-	public String getWorkingDir()
-	{
-		return workingDir;
-	}
 
 	@Override
 	public Set<String> getWorkerSet()
@@ -251,4 +255,51 @@ public class Worker extends WorkflowExecutor
 		Utils.setPropFromArgs(args);
 		Worker.start();
 	}
+
+	@Override
+	public long getUsage()
+	{
+		long totalUsage = 0;
+		for(ExecutingProcessor p : processors)
+		{
+			totalUsage += p.getUsage();
+		}
+		return totalUsage;
+	}
+	
+	@Override
+	public long getTransferredBytes()
+	{
+		long transferredBytes = FileManager.get().getTransferredBytes();
+		return transferredBytes;
+	}
+
+	@Override
+	public WorkflowFile suspend(String tid)
+	{
+		String worker = runningTasks.get(tid);
+		if(worker == null)
+		{
+			return null;
+		}
+		WorkflowFile ckptFile = processors[Integer.parseInt(worker)].suspend(tid);
+		String superWfid = Task.get(tid).getSuperWfid();
+		try
+		{
+			FileServer.request(
+					this.getWorkingDir(), 
+					ckptFile.getName(superWfid), 
+					FileServer.UPLOAD_REQ_TYPE, 
+					Utils.getProp("manager_host"), 
+					FileServer.DEFAULT_PORT);
+		}
+		catch (IOException ex)
+		{
+			logger.log("Cannot upload checkpointed data.", ex);
+			return null;
+		}
+		return ckptFile;
+	}
+	
+	
 }

@@ -4,8 +4,7 @@
  */
 package workflowengine;
 
-import java.rmi.registry.LocateRegistry;
-import workflowengine.server.WorkflowExecutorInterface;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -19,6 +18,9 @@ public class A
 	}
     public static void main(String[] args) throws Exception
     {
-        System.out.println(A.class.getMethod("a", Integer.TYPE, String.class).toString());
+        for(Object k : System.getenv().keySet())
+		{
+			System.out.println(k+":"+System.getenv(k.toString()));
+		}
     }
 }

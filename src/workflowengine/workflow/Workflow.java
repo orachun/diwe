@@ -51,6 +51,7 @@ public class Workflow implements Serializable, Savable
 	protected long estimatedFinishedTime = -1;
 	protected boolean isFinished = false;
 	protected long cumulatedEstimatedExecTime = -1;
+	protected boolean isSubworkflow = false;
 	
 	private Set<Task> allTasks = null;	//All tasks for transfer over servers
 	private Set<WorkflowFile> allFiles = null; //All files for transfer over servers
@@ -59,6 +60,11 @@ public class Workflow implements Serializable, Savable
 	{
 		this.name = name;
 		this.uuid = uuid;
+		Cacher.cache(uuid, this);
+	}
+	
+	public void cache()
+	{
 		Cacher.cache(uuid, this);
 	}
 
@@ -151,6 +157,7 @@ public class Workflow implements Serializable, Savable
 	public Workflow getSubworkflow(String name, Collection<String> tasksInSubWf)
 	{
 		Workflow w = new Workflow(name, Utils.uuid());
+		w.isSubworkflow = true;
 		for (String taskUUID : tasksInSubWf)
 		{
 			w.taskGraph.addNode(taskUUID);
@@ -328,6 +335,13 @@ public class Workflow implements Serializable, Savable
 		return taskGraph.getLeaves();
 	}
 
+	public boolean isSubworkflow()
+	{
+		return isSubworkflow;
+	}
+
+	
+	
 	/**
 	 * Return the name of the working directory (not full path) for this
 	 * workflow
@@ -393,6 +407,7 @@ public class Workflow implements Serializable, Savable
 		wf.status = ((String) obj.get("status")).charAt(0);
 		wf.submitted = (long) obj.get("submitted");
 		wf.superWfid = (String) obj.get("superwfid");
+		wf.isSubworkflow = (boolean) obj.get("is_subworkflow");
 
 		BasicDBList tasks = (BasicDBList) obj.get("tasks");
 		for (Object o : tasks)
@@ -426,7 +441,8 @@ public class Workflow implements Serializable, Savable
 				.append("started_at", startTime)
 				.append("finished_at", finishedTime)
 				.append("est_finish", estimatedFinishedTime)
-				.append("cumulated_time", cumulatedEstimatedExecTime);
+				.append("cumulated_time", cumulatedEstimatedExecTime)
+				.append("is_subworkflow", isSubworkflow);
 
 		BasicDBList taskList = new BasicDBList();
 
@@ -514,5 +530,18 @@ public class Workflow implements Serializable, Savable
 	{
 		Workflow wf = WorkflowFactory.fromDummyDAX("/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml", "Inspiral_30");
 		Cacher.flushAll();
+	}
+	
+	public Workflow getSubWorkflowOfRemainTasks()
+	{
+		Set<String> remainTasks = new HashSet<>();
+		for(String tid : getTaskSet())
+		{
+			if(Task.get(tid).getStatus().status != STATUS_COMPLETED)
+			{
+				remainTasks.add(tid);
+			}
+		}
+		return getSubworkflow(this.name, remainTasks);
 	}
 }

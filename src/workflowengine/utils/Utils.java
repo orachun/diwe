@@ -673,4 +673,10 @@ public class Utils
 		System.arraycopy(arr, 0, newArr, 0, arr.length);
 		return newArr;
 	}
+	
+	public static long getFileLength(String filepath)
+	{
+		return new File(filepath).length();
+	}
+	
 }

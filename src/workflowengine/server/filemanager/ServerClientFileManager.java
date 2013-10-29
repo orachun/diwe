@@ -4,9 +4,9 @@
  */
 package workflowengine.server.filemanager;
 
+import java.io.IOException;
 import java.util.Set;
 import workflowengine.server.WorkflowExecutor;
-import workflowengine.utils.SFTPClient;
 import workflowengine.utils.Utils;
 
 /**
@@ -16,6 +16,24 @@ import workflowengine.utils.Utils;
 public class ServerClientFileManager extends FileManager
 {
 	private static ServerClientFileManager instant;
+	private WorkflowExecutor thisSite;
+	private long transferredBytes = 0;
+	private FileServer fileServer;
+	
+	private ServerClientFileManager()
+	{
+		thisSite = WorkflowExecutor.get();
+		try
+		{
+			fileServer = FileServer.get(thisSite.getWorkingDir());
+		}
+		catch (IOException ex)
+		{
+			thisSite.logger.log("Cannot start file server."+ex.getMessage(), ex);
+		}
+		Utils.bash("rm -rf "+thisSite.getWorkingDir()+"/*", false);
+	}
+	
 	
 	public static FileManager get()
 	{
@@ -36,17 +54,25 @@ public class ServerClientFileManager extends FileManager
 	public void waitForFile(String name)
 	{
 		String fullpath = Utils.getProp("working_dir") + "/" + name;
-		if (!Utils.fileExists(fullpath))
+		
+		if(Utils.fileExists(fullpath))
 		{
-//			System.out.println("Downloading: "+fullpath);
-//			System.out.println("  From: "+
-//						WorkflowExecutor.getSiteManager().getWorkingDir() + "/" + name);
-			String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
-			SFTPClient.get(Utils.getProp("manager_host"),
-					remoteWorkingDir + "/" + name,
-					fullpath);			
+			return;
+		}
+		try
+		{
+			transferredBytes += FileServer.request(
+					thisSite.getWorkingDir(),
+					name, FileServer.DOWNLOAD_REQ_TYPE,
+					thisSite.getManagerURI());
+		}
+		catch (IOException ex)
+		{
+			thisSite.logger.log("Cannot download file.", ex);
 		}
 	}
+	
+	
 	/**
 	 * Report the manager that the output file is created and ready to be
 	 * transferred
@@ -58,13 +84,24 @@ public class ServerClientFileManager extends FileManager
 	{
 		for(String name : filenames)
 		{
-//			System.out.println("Uploading file "+name);
-			String fullpath = Utils.getProp("working_dir") + "/" + name;
-			String remoteWorkingDir = WorkflowExecutor.getSiteManager().getWorkingDir();
-			SFTPClient.put(Utils.getProp("manager_host"),
-					fullpath,
-					remoteWorkingDir + "/" + name);
+			try
+			{
+				transferredBytes += FileServer.request(
+						thisSite.getWorkingDir(),
+						name, 
+						FileServer.UPLOAD_REQ_TYPE,
+						thisSite.getManagerURI());
+			}
+			catch (IOException ex)
+			{
+				thisSite.logger.log("Cannot upload file.", ex);
+			}
 		}
+	}
+	
+	public int getPort()
+	{
+		return fileServer.getPort();
 	}
 	
 	@Override
@@ -73,4 +110,12 @@ public class ServerClientFileManager extends FileManager
 		
 	}
 
+	@Override
+	public long getTransferredBytes()
+	{
+		return transferredBytes;
+	}
+
+	
+	
 }

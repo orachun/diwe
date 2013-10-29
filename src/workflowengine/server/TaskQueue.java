@@ -34,7 +34,6 @@ public class TaskQueue implements Serializable
 		
 	public synchronized void submit(Schedule s)
 	{
-		
 		taskQueue.addAll(s.getSettings().getWorkflow().getTaskQueueByPriority());
 		for (Map.Entry<String, String> entry : s.getMapping().entrySet())
 		{
@@ -43,6 +42,12 @@ public class TaskQueue implements Serializable
 				s.getWorkflowID(), entry.getValue()
 			});
 		}
+	}
+	
+	public synchronized void update(Schedule s)
+	{
+		taskQueue.removeAll(s.getSettings().getWorkflow().getTaskSet());
+		submit(s);
 	}
 	
 	/**

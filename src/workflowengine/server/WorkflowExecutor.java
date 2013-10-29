@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import lipermi.net.Client;
-import org.jfree.chart.JFreeChart;
 import workflowengine.utils.HostAddress;
 import workflowengine.monitor.EventLogger;
 import workflowengine.monitor.HTMLUtils;
@@ -23,6 +22,8 @@ import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.server.filemanager.FileManager;
+import workflowengine.server.filemanager.FileServer;
+import workflowengine.utils.Checkpointing;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
@@ -31,6 +32,7 @@ import workflowengine.workflow.Task;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFactory;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -51,6 +53,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	public EventLogger eventLogger;
 	protected int totalProcessors = 0;
 	protected double avgBandwidth = -1;
+	private String workingDir = Utils.getProp("working_dir");
 //	protected Set<String> notFinishedWorkflows = new HashSet<>();
 	protected WorkflowExecutor()  //throws RemoteException
 	{
@@ -67,12 +70,12 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 //			{
 //				while(true)
 //				{
-//					Utils.bash("nc -l "+Utils.getProp("local_hostname")+" 19191 > /dev/null", true);
+//					Utils.bash("nc -l 19191 > /dev/null", true);
 //				}
 //			}
 //		}.start();
 		
-		
+		Checkpointing.startCoordinator();
 		
 		eventLogger = new EventLogger();
 		eventLogger.start("EXEC_INIT", "Initializing executor");
@@ -81,11 +84,22 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		addr = new HostAddress(Utils.getPROP(), "local_hostname", "local_port");
 		this.uri = Utils.getProp("local_hostname")+":"+Utils.getIntProp("local_port");
 		
-		//DBRecord.prepareConnection();
+		//Start default file server
+		try
+		{
+			FileServer.get(workingDir);
+		}
+		catch (IOException ex)
+		{
+			logger.log("Cannot start file server.", ex);
+			shutdown();
+		}
+		
+		//Prepare Mongo Database
 		if(!MongoDB.prepare())
 		{
 			logger.log("Cannot prepare database connection.");
-			System.exit(1);
+			shutdown();
 		}
 		
 		if (registerForRMI)
@@ -269,6 +283,9 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		sb.append("<br/>").append("Total Processors: ").append(this.totalProcessors);
 		sb.append("<br/>").append("Manager URI: ").append(this.managerURI);
 		sb.append("<br/>").append("Average Bandwidth: ").append(getAvgBandwidth());
+		sb.append("<br/>").append("Exec Usage(s): ").append(getUsage());
+		sb.append("<br/>").append("Transferred Data(bytes): ").append(getTransferredBytes());
+		
 		sb.append("<h1>Workers</h1>");
 		Set<String> workerSet = getWorkerSet();
 		if(workerSet != null)
@@ -403,8 +420,34 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	{
 		return eventLogger;
 	}
+
+	@Override
+	public long getTransferredBytes()
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public long getUsage()
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public WorkflowFile suspend(String tid)
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
 	
 	
+	
+	
+	@Override
+	public String getWorkingDir()
+	{
+		return workingDir;
+	}
+
 	
 	
 	
@@ -475,11 +518,6 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 
-	@Override
-	public String getWorkingDir()  //throws RemoteException
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
 
 
 	// </editor-fold>

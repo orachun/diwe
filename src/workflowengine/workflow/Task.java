@@ -17,7 +17,6 @@ import workflowengine.utils.db.Savable;
  */
 public class Task implements Serializable, Comparable<Task>, Savable
 {
-
 	private String uuid;
 	private double estimateExecTime;
 	private String cmd;
@@ -26,9 +25,12 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	private Set<String> inputs = new HashSet<>(); //WorkflowFile
 	private Set<String> outputs = new HashSet<>(); //WorkflowFile
 	private double priority = 1;
+	private String superWfid;
+	private String ckptFid = null;
 
-	public Task(String name, String cmd, double estimateExecTime, String uuid, TaskStatus status)
+	public Task(String superWfid, String name, String cmd, double estimateExecTime, String uuid, TaskStatus status)
 	{
+		this.superWfid = superWfid;
 		this.name = name;
 		this.estimateExecTime = estimateExecTime;
 		this.cmd = cmd;
@@ -159,6 +161,23 @@ public class Task implements Serializable, Comparable<Task>, Savable
 		this.priority = p;
 	}
 
+	public String getSuperWfid()
+	{
+		return superWfid;
+	}
+
+	public void setCkptFid(String ckptFid)
+	{
+		this.ckptFid = ckptFid;
+	}
+
+	public String getCkptFid()
+	{
+		return ckptFid;
+	}
+
+	
+	
 	public static Task get(String taskUUID)
 	{
 		return (Task) Cacher.get(Task.class, taskUUID);
@@ -179,11 +198,13 @@ public class Task implements Serializable, Comparable<Task>, Savable
 				(long) obj.get("start"),
 				(long) obj.get("finish"));
 		Task t = new Task(
+				(String) obj.get("super_wfid"),
 				(String) obj.get("name"),
 				(String) obj.get("cmd"),
 				(double) obj.get("estopr"),
 				(String) obj.get("tid"),
 				s);
+		t.ckptFid = (String)obj.get("ckpt_fid");
 		t.setPriority((double) obj.get("priority"));
 		BasicDBList inputs = (BasicDBList) obj.get("input");
 		for (Object o : inputs)
@@ -218,7 +239,9 @@ public class Task implements Serializable, Comparable<Task>, Savable
 				.append("exit_value", status.retVal)
 				.append("priority", priority)
 				.append("input", inputList)
-				.append("output", outputList);
+				.append("output", outputList)
+				.append("super_wfid", superWfid)
+				.append("ckpt_fid", ckptFid);
 		MongoDB.TASK.update(new BasicDBObject("tid", uuid), obj, true, false);
 
 	}

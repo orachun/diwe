@@ -4,6 +4,7 @@
  */
 package workflowengine.server.filemanager;
 
+import com.mongodb.AggregationOutput;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
@@ -26,14 +27,11 @@ import java.net.UnknownHostException;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -60,7 +58,7 @@ import workflowengine.workflow.WorkflowFile;
 public class DIFileManager extends FileManager implements DIFileManagerInterface
 {
 	private static int MAX_UPLOAD_THREADS = 2;
-	private static int portShift = 100;
+	private static final int PORT_SHIFT = 100;
 	private HashMap<String, Object> locks = new HashMap<>();
 	private static DIFileManager instant;
 	private int PIECE_LEN = Utils.getIntProp("fs_piece_size");
@@ -95,10 +93,9 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	
 	private boolean uploadThreadSleeping = false;
 	
-	
 	protected DIFileManager() throws FuseException
 	{
-		Utils.registerRMIServer(DIFileManagerInterface.class, this, portShift + Utils.getIntProp("local_port"));
+		Utils.registerRMIServer(DIFileManagerInterface.class, this, PORT_SHIFT + Utils.getIntProp("local_port"));
 		//Init MongoDB
 		try
 		{
@@ -341,14 +338,9 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 		//Transfer file to toURI
 		try
 		{
-			tferLogColl.insert(new BasicDBObject("time", Utils.time())
-					.append("name", p.name)
-					.append("no", p.pieceNo)
-					.append("worker", toURI)
-					.append("type", "send"));
 //			System.out.println("Upload " + p.name + p.pieceNo + ":" + toURI);
 			String[] host = toURI.split(":");
-			Socket s = new Socket(host[0], 2 * portShift + Integer.parseInt(host[1]));
+			Socket s = new Socket(host[0], 2 * PORT_SHIFT + Integer.parseInt(host[1]));
 			ObjectOutputStream oos = new ObjectOutputStream(s.getOutputStream());
 			oos.writeObject(thisURI);
 			oos.writeObject(p);
@@ -385,6 +377,14 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 				s.getOutputStream().write(content, 0, len);
 				s.shutdownOutput();
 				s.getInputStream().read();
+				
+				
+				tferLogColl.insert(new BasicDBObject("time", Utils.time())
+					.append("name", p.name)
+					.append("no", p.pieceNo)
+					.append("length", (long)len)
+					.append("worker", toURI)
+					.append("type", "send"));
 			}
 			s.close();
 
@@ -413,11 +413,6 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 
 	protected void pieceRetrieved(PieceInfo p, String fromWorker)
 	{
-		tferLogColl.insert(new BasicDBObject("time", Utils.time())
-				.append("name", p.name)
-				.append("no", p.pieceNo)
-				.append("worker", fromWorker)
-				.append("type", "receive"));
 		
 		queue.pieceRetrieved(p.name, p.pieceNo, fromWorker, p.fileLength);
 		queue.pieceRetrieved(p.name, p.pieceNo, thisURI, p.fileLength);
@@ -675,7 +670,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	{
 		try
 		{
-			int port = portShift * 2 + Utils.getIntProp("local_port");
+			int port = PORT_SHIFT * 2 + Utils.getIntProp("local_port");
 			System.out.println("Listening for file pieces on " + port);
 			final ServerSocket ss = new ServerSocket(port);
 			pieceListeningThread = new Thread("Piece listening thread")
@@ -758,6 +753,14 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 						os.flush();
 						pieceRetrieved(p, fromURI);
 						fos.close();
+						
+						
+						tferLogColl.insert(new BasicDBObject("time", Utils.time())
+								.append("name", p.name)
+								.append("no", p.pieceNo)
+								.append("length", (long)offset)
+								.append("worker", fromURI)
+								.append("type", "receive"));
 					}
 					s.close();
 				}
@@ -775,7 +778,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 		DIFileManagerInterface fm = null;
 		int tries = 0;
 		String[] s = weURI.split(":");
-		String uri = s[0] + ":" + (portShift + Integer.parseInt(s[1]));
+		String uri = s[0] + ":" + (PORT_SHIFT + Integer.parseInt(s[1]));
 		while (fm == null && tries < 10)
 		{
 			try
@@ -1389,4 +1392,23 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 			notifyAllUploadThreads();
 		}
 	}
+
+	@Override
+	public long getTransferredBytes()
+	{
+		// build the $projection operation
+		DBObject project = new BasicDBObject("$project", new BasicDBObject("length", 1) );
+
+		// Now the $group operation
+		DBObject groupFields = new BasicDBObject( "_id", "")
+			.append("total_length", new BasicDBObject( "$sum", "$length"));
+		DBObject group = new BasicDBObject("$group", groupFields);
+
+		// run aggregation
+		AggregationOutput output = tferLogColl.aggregate( project, group );
+		
+		return (long)output.results().iterator().next().get("total_length");
+	}
+	
+	
 }

@@ -13,7 +13,7 @@ import java.io.Serializable;
 public class ScheduleEntry implements Serializable
 {
 	public final String taskUUID;
-	public final String target;
+	public String target;
 	/**
 	 * also used as a directory
 	 */

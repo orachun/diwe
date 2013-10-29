@@ -7,12 +7,9 @@ package workflowengine.monitor;
 import java.io.Serializable;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
 import org.jfree.data.gantt.Task;
@@ -73,12 +70,22 @@ public class EventLogger implements Serializable
 		
 	}
 	
+	public boolean hasEvent(String name)
+	{
+		return events.containsKey(name);
+	}
+	
+	public boolean eventFinished(String name)
+	{
+		return events.get(name).end != -1;
+	}
+	
 	/**
 	 * 
 	 * @param name
 	 * @return event ID
 	 */
-	public void start(String name, String desc)
+	public String start(String name, String desc)
 	{
 		if (events.containsKey(name))
 		{
@@ -94,6 +101,7 @@ public class EventLogger implements Serializable
 		{
 			eventList.add(e);
 		}
+		return name;
 	}
 	
 	public void finish(String name)
@@ -155,10 +163,11 @@ public class EventLogger implements Serializable
 		
 		for(Event e : eventList)
 		{
-			s1.add(new Task(e.name,new SimpleTimePeriod(
+			Task t = new Task(e.name,new SimpleTimePeriod(
 					e.start * 1000,
-					e.end == -1 ? end*1000 : e.end*1000
-					)));
+					e.end == -1 ? end*1000 : e.end*1000 + 50
+					));
+			s1.add(t);
 		}
 		TaskSeriesCollection collection = new TaskSeriesCollection();
         collection.add(s1);

@@ -36,6 +36,11 @@ public class WorkflowFile implements Serializable, Savable
 		Cacher.cache(uuid, this);
 	}
 
+	public void cache()
+	{
+		Cacher.cache(uuid, this);
+	}
+	
     public char getType()
     {
         return type;
@@ -57,7 +62,7 @@ public class WorkflowFile implements Serializable, Savable
     }
     public String getName(String wfid)
     {
-        return wfid+"/"+name;
+        return wfid+'/'+name;
     }
 
 	public String getUUID()

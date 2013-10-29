@@ -1,0 +1,10 @@
+Default Ports
+
+[BASE]
+10000			Site Manager
+10001 -	10009	Worker
+
+
+BASE + 10		Default File Server
+BASE + 11-19	File transferring
+BASE + 20		DMTCP Coordinator

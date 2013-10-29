@@ -288,25 +288,19 @@ public class Schedule
         return sb.toString();
     }
 	
-	private static String[] keys = new String[]{"tid", "wkid"};
 	public void save()
 	{
 		for(Map.Entry<String, String>  entry : mapping.entrySet())
 		{
 			String tid = entry.getKey();
 			String wkid = entry.getValue();
-//			new DBRecord("schedule")
-//					.set("tid", tid)
-//					.set("wkid", wkid)
-////					.set("estimated_start", estimatedStart.get(tid))
-////					.set("estimated_finish", estimatedFinish.get(tid))
-//					.upsert(keys);
 			
 			MongoDB.SCHEDULE.update(new BasicDBObject("tid", tid), 
 					new BasicDBObject("tid", tid)
 					.append("wkid", wkid)
 					.append("estimated_start", estimatedStart.get(tid))
 					.append("estimated_finish", estimatedFinish.get(tid))
+					.append("wfid", settings.getWorkflow().getSuperWfid())
 					, true, false);
 		}
 	}
