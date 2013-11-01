@@ -9,6 +9,7 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -27,6 +28,7 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.logging.Level;
 import lipermi.exception.LipeRMIException;
 import lipermi.handler.CallHandler;
 import lipermi.handler.filter.GZipFilter;
@@ -189,9 +191,9 @@ public class Utils
         {
             Process p = Runtime.getRuntime().exec(cmds);
             StringBuilder sb = null;
+			BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
             if (getOutput)
             {
-				BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 sb = new StringBuilder();
                 String line;
                 while ((line = br.readLine()) != null)
@@ -199,6 +201,10 @@ public class Utils
                     sb.append(line).append('\n');
                 }
             }
+			else
+			{
+				while (br.readLine() != null){}
+			}
             p.waitFor();
             return getOutput ? sb.toString() : "";
         }
@@ -679,4 +685,53 @@ public class Utils
 		return new File(filepath).length();
 	}
 	
+	public static void printFileContent(String filepath)
+	{
+		System.out.println("Content of "+filepath+":");
+		FileInputStream fis = null;
+		try
+		{
+			fis = new FileInputStream(filepath);
+			byte[] buff = new byte[1000000];
+			while(fis.read(buff) > 0)
+			{
+				System.out.print(new String(buff));
+			}
+			fis.close();
+		}
+		catch (IOException ex)
+		{
+			java.util.logging.Logger.getLogger(Utils.class.getName()).log(Level.SEVERE, null, ex);
+		}
+		finally
+		{
+			try
+			{
+				fis.close();
+			}
+			catch (IOException ex)
+			{
+				java.util.logging.Logger.getLogger(Utils.class.getName()).log(Level.SEVERE, null, ex);
+			}
+		}
+		System.out.println("\n==============\n");
+	}
+	
+	public static void waitUntilFileExists(String filepath)
+	{
+		while(fileFromWildcard(filepath).length == 0)
+		{
+			try
+			{
+				Thread.sleep(20);
+			}
+			catch (InterruptedException ex)
+			{}
+		}
+	}
+	
+	public static String getFileFromWildcard(String filepath)
+	{
+		return fileFromWildcard(filepath)[0].getAbsolutePath();
+	}
 }

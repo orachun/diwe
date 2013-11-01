@@ -5,7 +5,9 @@
 package workflowengine.server.filemanager;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.utils.Utils;
 
@@ -19,6 +21,7 @@ public class ServerClientFileManager extends FileManager
 	private WorkflowExecutor thisSite;
 	private long transferredBytes = 0;
 	private FileServer fileServer;
+	private Map<String, String> locks = new ConcurrentHashMap<>();
 	
 	private ServerClientFileManager()
 	{
@@ -55,20 +58,30 @@ public class ServerClientFileManager extends FileManager
 	{
 		String fullpath = Utils.getProp("working_dir") + "/" + name;
 		
-		if(Utils.fileExists(fullpath))
+		String lock = locks.get(name);
+		if(lock == null)
 		{
-			return;
+			lock = name;
+			locks.put(name, name);
 		}
-		try
+		synchronized(lock)
 		{
-			transferredBytes += FileServer.request(
-					thisSite.getWorkingDir(),
-					name, FileServer.DOWNLOAD_REQ_TYPE,
-					thisSite.getManagerURI());
-		}
-		catch (IOException ex)
-		{
-			thisSite.logger.log("Cannot download file.", ex);
+			if(Utils.fileExists(fullpath))
+			{
+				return;
+			}
+			try
+			{
+				transferredBytes += FileServer.request(
+						thisSite.getWorkingDir(),
+						name, FileServer.TYPE_DOWNLOAD_REQ,
+						thisSite.getManagerURI());
+			}
+			catch (IOException ex)
+			{
+				thisSite.logger.log("Cannot download file.", ex);
+			}
+			locks.remove(lock);
 		}
 	}
 	
@@ -89,7 +102,7 @@ public class ServerClientFileManager extends FileManager
 				transferredBytes += FileServer.request(
 						thisSite.getWorkingDir(),
 						name, 
-						FileServer.UPLOAD_REQ_TYPE,
+						FileServer.TYPE_UPLOAD_REQ,
 						thisSite.getManagerURI());
 			}
 			catch (IOException ex)

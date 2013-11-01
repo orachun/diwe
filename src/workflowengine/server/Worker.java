@@ -12,14 +12,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
+import static workflowengine.server.WorkflowExecutor.getRemoteExecutor;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Utils;
@@ -34,8 +33,6 @@ import workflowengine.workflow.WorkflowFile;
 public class Worker extends WorkflowExecutor
 {
 //	protected static Worker instant;
-
-	private TaskQueue taskQueue = new TaskQueue();
 	private ExecutorNetwork execNetwork;
 	private ExecutingProcessor[] processors;
 	private int workingProcessors = 0;
@@ -88,7 +85,6 @@ public class Worker extends WorkflowExecutor
 				logger.log("Workflow " + wf.getUUID() + " is submitted.");
 				Utils.setProp(prop);
 				wf.setSubmitted(Utils.time());
-//					wf.save();
 				wf.finalizedRemoteSubmit();
 
 				for (String tid : wf.getTaskSet())
@@ -98,10 +94,6 @@ public class Worker extends WorkflowExecutor
 
 				Utils.mkdirs(thisWorker.getWorkingDir() + "/" + wf.getSuperWfid());
 
-				//Wait for all input file exists
-				logger.log("Waiting for all input files...");
-				logger.log("Done.", false);
-
 				logger.log("Scheduling the submitted workflow...");
 				Schedule s = thisWorker.getScheduler().getSchedule(
 						new SchedulingSettings(thisWorker, wf, execNetwork, thisWorker.getDefaultFC()));
@@ -110,7 +102,6 @@ public class Worker extends WorkflowExecutor
 				synchronized (thisWorker)
 				{
 					taskQueue.submit(s);
-					thisWorker.notifyAll();
 				}
 				dispatchTask();
 			}
@@ -155,7 +146,6 @@ public class Worker extends WorkflowExecutor
 				final ScheduleEntry se = taskQueue.poll();
 				if (se != null)
 				{
-					//logger.log("Starting execution of task "+se.taskUUID);
 					execThreadPool.submit(new Runnable()
 					{
 						@Override
@@ -166,6 +156,7 @@ public class Worker extends WorkflowExecutor
 							{
 								waitForFile(fid, se.superWfid);
 							}
+							logTaskStatus(TaskStatus.dispatchedStatus(t.getUUID()));
 							processors[Integer.parseInt(se.target)].exec(Task.get(se.taskUUID), se);
 						}
 					});
@@ -173,6 +164,7 @@ public class Worker extends WorkflowExecutor
 				}
 				else
 				{
+					System.out.println("No ready tasks");
 					break;
 				}
 			}
@@ -193,6 +185,7 @@ public class Worker extends WorkflowExecutor
 				boolean taskCompleted = status.status == TaskStatus.STATUS_COMPLETED;
 				Task.get(status.taskID).setStatus(status);
 				
+				
 				if (taskCompleted)
 				{
 					//Upload output files
@@ -210,15 +203,22 @@ public class Worker extends WorkflowExecutor
 				{
 					runningTasks.put(status.taskID, status.schEntry.target);
 				}
+				else if(status.status == TaskStatus.STATUS_SUSPENDED)
+				{
+					workingProcessors--;
+					runningTasks.remove(status.taskID);
+				}
 				
 				status.schEntry.target = Worker.this.uri;
-				manager.setTaskStatus(status);
+				
 				if (taskCompleted && !taskQueue.isEmpty())
 				{
 					dispatchTask();
 				}
 			}
 		});
+		logTaskStatus(status);
+		manager.setTaskStatus(status);
 	}
 
 	@Override
@@ -227,11 +227,6 @@ public class Worker extends WorkflowExecutor
 		return new RemoteWorker(uri, processors[Integer.parseInt(uri)]);
 	}
 
-	@Override
-	public String getTaskQueueHTML()
-	{
-		return taskQueue.toHTML();
-	}
 
 
 	@Override
@@ -275,31 +270,41 @@ public class Worker extends WorkflowExecutor
 	}
 
 	@Override
-	public WorkflowFile suspend(String tid)
+	public Set<SuspendedTaskInfo> suspendRunningTasks()
 	{
-		String worker = runningTasks.get(tid);
-		if(worker == null)
+		Set<SuspendedTaskInfo> allSuspendedTasks = new HashSet<>();
+		for(ExecutingProcessor p : processors)
 		{
-			return null;
+			SuspendedTaskInfo sinfo = p.suspend();
+			if(sinfo != null)
+			{
+				String superWfid = Task.get(sinfo.tid).getSuperWfid();
+				try
+				{
+					logger.log("Uploading checkpoint data...");
+					FileServer.request(
+							this.getWorkingDir(), 
+							sinfo.ckptFile.getName(superWfid), 
+							FileServer.TYPE_UPLOAD_REQ, 
+							Utils.getProp("manager_host"), 
+							FileServer.getPort(Utils.getIntProp("manager_port")));
+					logger.log("Done", false);
+				}
+				catch (IOException ex)
+				{
+					logger.log("Cannot upload checkpointed data.", ex);
+					return null;
+				}
+				allSuspendedTasks.add(sinfo);
+			}
 		}
-		WorkflowFile ckptFile = processors[Integer.parseInt(worker)].suspend(tid);
-		String superWfid = Task.get(tid).getSuperWfid();
-		try
-		{
-			FileServer.request(
-					this.getWorkingDir(), 
-					ckptFile.getName(superWfid), 
-					FileServer.UPLOAD_REQ_TYPE, 
-					Utils.getProp("manager_host"), 
-					FileServer.DEFAULT_PORT);
-		}
-		catch (IOException ex)
-		{
-			logger.log("Cannot upload checkpointed data.", ex);
-			return null;
-		}
-		return ckptFile;
+		return allSuspendedTasks;
 	}
 	
+	@Override
+	public void removeWorkflowFromQueue(String superWfid)
+	{
+		taskQueue.removeWorkflow(superWfid);
+	}
 	
 }

@@ -5,8 +5,9 @@
 package workflowengine.server;
 
 import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 import workflowengine.schedule.ScheduleEntry;
-import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Checkpointing;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Task;
@@ -36,13 +37,15 @@ public class ExecutingProcessor
 	{
 		if(currentProcess != null)
 		{
-			throw new IllegalStateException("Executing other process.");
+			manager.logger.log("ERROR: executing another process.");
+			return null;
 		}
 		long start = Utils.time();
 		this.currentTask = t;
 		this.currentSE = se;
 		TaskStatus ts = TaskStatus.executingStatus(se);
 		int tries = 0;
+		String[] cmds = prepareCmd(t, se);
 		while (ts.status != TaskStatus.STATUS_COMPLETED && tries < 5)
 		{
 			try
@@ -50,9 +53,9 @@ public class ExecutingProcessor
 				synchronized (SUSPEND_LOCK)
 				{
 					isSuspended = false;
-					currentProcess = startProcess(t, se);
+					currentProcess = startProcess(t, se, cmds);
+					manager.setTaskStatus(ts);
 				}
-				manager.setTaskStatus(ts);
 			}
 			catch (IOException ex)
 			{
@@ -88,8 +91,11 @@ public class ExecutingProcessor
 						}
 						else
 						{
-							ts = ts.fail(ret, "Error: return value is not 0.");
-							manager.logger.log("Error: Task "+t.getName()+ " did not return 0.");
+							ts = ts.fail(ret, "Error: return value is "+ret+".");
+							manager.logger.log("Error: Task "+t.getName()+ " is "+ret+".");
+							String dir = manager.getWorkingDir() + "/" + se.superWfid;
+							Utils.printFileContent(dir + "/" + t.getName()+"_"+t.getUUID() + ".stdout");
+							Utils.printFileContent(dir + "/" + t.getName()+"_"+t.getUUID() + ".stderr");
 						}
 					}
 				}
@@ -120,36 +126,40 @@ public class ExecutingProcessor
 	private String[] prepareCmd(Task t, ScheduleEntry se)
     {
 		String taskDir = manager.getWorkingDir() + "/" + se.superWfid;
-		String prefix;
+		String[] cmds;
 		if(t.getStatus().status == TaskStatus.STATUS_SUSPENDED)
 		{
-			prefix = Checkpointing.getResumeCmdPrefix(taskDir, t.getUUID());
 			WorkflowFile ckptFile = WorkflowFile.get(t.getCkptFid());
-			Utils.bash("tar -xzf "+taskDir+'/'+ckptFile.getName()+" -C "+taskDir, false);
+			String ckptFileName = taskDir+'/'+ckptFile.getName();
+			Checkpointing.unpack(ckptFileName, taskDir);
+			cmds = Checkpointing.getResumeCmd(taskDir, t.getUUID()).split(";");
 		}
 		else
 		{
+		String prefix;
 			prefix = Checkpointing.getExecCmdPrefix(taskDir, t.getUUID());
+			cmds = (prefix	+taskDir + "/" + t.getCmd()).split(";");
 		}
-		String[] cmds = (prefix	+taskDir + "/" + t.getCmd()).split(";");
 		
-//		for(String c : cmds)
-//		{
-//			System.out.printf("%s ", c);
-//		}
-//		System.out.println();
+		for(String c : cmds)
+		{
+			System.out.printf("%s ", c);
+		}
+		System.out.println();
 		
 		return cmds;
     }
 	
-	private Process startProcess(Task t, ScheduleEntry se) throws IOException
+	private Process startProcess(Task t, ScheduleEntry se, String[] cmds) throws IOException
     {
 		String dir = manager.getWorkingDir() + "/" + se.superWfid;
+		boolean isResume = t.getStatus().status == TaskStatus.STATUS_SUSPENDED;
         ProcessBuilder pb = Utils.createProcessBuilder(
-				prepareCmd(t, se),
+				cmds,
                 dir,
-				dir + "/" + t.getName()+"_"+t.getUUID() + ".stdout",
-				dir + "/" + t.getName()+"_"+t.getUUID() + ".stderr", null);
+				isResume ? null : dir + "/" + t.getName()+"_"+t.getUUID() + ".stdout",
+				isResume ? null : dir + "/" + t.getName()+"_"+t.getUUID() + ".stderr", 
+				null);
         currentProcess = pb.start();
 		return currentProcess;
     }
@@ -164,34 +174,53 @@ public class ExecutingProcessor
 		return usage;
 	}
 
-	public WorkflowFile suspend(String tid)
+	private Set<String> getRelatedOutputFiles(Task t)
 	{
-		if(currentProcess != null && currentTask.getUUID().equals(tid))
+		Set<String> files = new HashSet<>();
+		String taskDir = manager.getWorkingDir() + '/'+t.getSuperWfid() + '/';
+		for(String fid : t.getOutputFiles())
+		{
+			String fpath = taskDir+WorkflowFile.get(fid).getName();
+			
+			if(Utils.fileExists(fpath))
+			{
+				files.add(fpath);
+			}
+		}
+		files.add(taskDir+t.getName()+"_"+t.getUUID() + ".stdout");
+		files.add(taskDir+t.getName()+"_"+t.getUUID() + ".stderr");
+		return files;
+	}
+	
+	public SuspendedTaskInfo suspend()
+	{
+		if(currentProcess != null)
 		{
 			synchronized(SUSPEND_LOCK)
 			{
 				System.out.println("Suspending current task...");
-				if(isSuspended)
+				if(isSuspended || Utils.isProcTerminated(currentProcess))
 				{
 					return null;
 				}
 				isSuspended = true;
 				Checkpointing.checkpoint();
-				
 				currentProcess.destroy();
 				
+				String tid = currentTask.getUUID();
 				String taskDir = manager.getWorkingDir() + '/' + this.currentSE.superWfid;
 				String ckptDir = Checkpointing.getCkptDir(taskDir, tid);
 				String ckptFileName = taskDir + '/' + tid + "_ckpt.tar";
-				Utils.bash("tar -zcf " + ckptFileName + ' ' + ckptDir, false);
+				Checkpointing.pack(ckptFileName, ckptDir, getRelatedOutputFiles(currentTask));
 
 				WorkflowFile ckptFile = new WorkflowFile(tid + "_ckpt.tar", 
 						Utils.getFileLength(ckptFileName), 
 						WorkflowFile.TYPE_CHECKPOINT_FILE, 
 						Utils.uuid()
 						);
+				
 				System.out.println("Done.");
-				return ckptFile;
+				return new SuspendedTaskInfo(tid, ckptFile);
 			}
 		}
 		

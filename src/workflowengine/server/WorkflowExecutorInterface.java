@@ -39,6 +39,8 @@ public interface WorkflowExecutorInterface extends Remote
 	
 	
 	public double getAvgBandwidth();
+	public Set<SuspendedTaskInfo> suspendRunningTasks();
+	public void removeWorkflowFromQueue(String superWfid);
 	
 	//For monitoring tool
 	public String getTaskQueueHTML() ; //throws RemoteException;
@@ -46,13 +48,11 @@ public interface WorkflowExecutorInterface extends Remote
 	public String getManagerURI() ; //throws RemoteException;
 	public Set<String> getWorkerSet() ; //throws RemoteException;
 	public String getStatusHTML() ; //throws RemoteException;
+	public long getUsage();
+	public long getTransferredBytes();
+	public EventLogger getEventLog();
 	
 	//For debugging only
 	public String exec(String cmd) ; //throws RemoteException;
 	
-	public EventLogger getEventLog();
-	
-	public long getUsage();
-	public long getTransferredBytes();
-	public WorkflowFile suspend(String tid);
 }

@@ -4,6 +4,7 @@
  */
 package workflowengine.schedule.scheduler;
 
+import java.util.Random;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
 
@@ -20,10 +21,11 @@ public class CircularScheduler implements Scheduler
         Schedule s = new Schedule(settings);
 		String[] sites = settings.getSiteArray();
 		String[] tasks = settings.getTaskArray();
-		
+		Random r = new Random();
+		int start = r.nextInt(sites.length);
         for (int i = 0; i < tasks.length; i++)
 		{
-			s.setWorkerForTask(tasks[i], sites[i % sites.length]);
+			s.setWorkerForTask(tasks[i], sites[(start+i) % sites.length]);
 		}
         s.evaluate();
         return s;

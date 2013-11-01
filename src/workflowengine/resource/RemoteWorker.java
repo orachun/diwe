@@ -39,6 +39,7 @@ public class RemoteWorker
 	{
 		this.URI = URI;
 		this.worker = new ProcessorWrapper(p);
+		this.totalProcessors = 1;
 	}
 	
 	private static class ProcessorWrapper extends WorkflowExecutor

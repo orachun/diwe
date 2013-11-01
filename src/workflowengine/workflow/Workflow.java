@@ -87,7 +87,7 @@ public class Workflow implements Serializable, Savable
 	/**
 	 * Prepare workflow to be used further. Gather workflow input/output files
 	 */
-	public void finalizeWorkflow()
+	public void generateInputOutputFileList()
 	{
 		HashSet<String> tmpInputFiles = new HashSet<>();
 		HashSet<String> tmpOutputFiles = new HashSet<>();
@@ -176,7 +176,7 @@ public class Workflow implements Serializable, Savable
 				}
 			}
 		}
-		w.finalizeWorkflow();
+		w.generateInputOutputFileList();
 		w.superWfid = this.getSuperWfid();
 		return w;
 	}
@@ -424,7 +424,7 @@ public class Workflow implements Serializable, Savable
 				wf.taskGraph.addNodes((String) t.get("tid"), (String) co);
 			}
 		}
-		wf.finalizeWorkflow();
+		wf.generateInputOutputFileList();
 		return wf;
 
 	}
@@ -500,10 +500,13 @@ public class Workflow implements Serializable, Savable
 		}
 	}
 
+	/**
+	 * Must be called after submitted immediately
+	 */
 	public void finalizedRemoteSubmit()
 	{
 		if (allFiles != null)
-		{int i=0;
+		{
 			for (WorkflowFile f : allFiles)
 			{
 				Cacher.cache(f.getUUID(), f);

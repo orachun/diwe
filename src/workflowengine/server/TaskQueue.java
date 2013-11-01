@@ -8,7 +8,6 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
@@ -233,6 +232,26 @@ public class TaskQueue implements Serializable
 		
 	}
 	
+	
+	public void removeWorkflow(String superWfid)
+	{
+		Set<String> removeTasks = new HashSet<>();
+		for(Map.Entry<String, String[]> entry : taskMap.entrySet())
+		{
+			Workflow wf = Workflow.get(entry.getValue()[WORKFLOW_ID]);
+			
+			if(wf.getSuperWfid().equals(superWfid))
+			{
+				removeTasks.add(entry.getKey());
+			}
+		}
+		
+		for(String tid : removeTasks)
+		{
+			taskMap.remove(tid);
+			taskQueue.remove(tid);
+		}
+	}
 }
 
 

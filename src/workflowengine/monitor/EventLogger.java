@@ -8,10 +8,16 @@ import java.io.Serializable;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.JFreeChart;
+import org.jfree.chart.labels.CategoryToolTipGenerator;
+import org.jfree.chart.labels.IntervalCategoryToolTipGenerator;
+import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.data.category.CategoryDataset;
 import org.jfree.data.gantt.Task;
 import org.jfree.data.gantt.TaskSeries;
 import org.jfree.data.gantt.TaskSeriesCollection;
@@ -24,7 +30,7 @@ import workflowengine.utils.Utils;
  */
 public class EventLogger implements Serializable
 {
-	private final Map<String, Event> events = new ConcurrentHashMap<>();
+	private final Map<String, List<Event>> events = new ConcurrentHashMap<>();
 	private final LinkedList<Event> eventList = new LinkedList<>();
 	private long maxStart = -1;
 	private long maxFinish = -1;
@@ -64,20 +70,11 @@ public class EventLogger implements Serializable
 		{
 			return end;
 		}
-
-		
-		
-		
 	}
 	
-	public boolean hasEvent(String name)
+	public void remove(Event e)
 	{
-		return events.containsKey(name);
-	}
-	
-	public boolean eventFinished(String name)
-	{
-		return events.get(name).end != -1;
+		events.get(e.name).remove(e);
 	}
 	
 	/**
@@ -85,36 +82,55 @@ public class EventLogger implements Serializable
 	 * @param name
 	 * @return event ID
 	 */
-	public String start(String name, String desc)
-	{
-		if (events.containsKey(name))
-		{
-			throw new IllegalArgumentException("Event name already exists");
-		}
-		
+	public Event start(String name, String desc)
+	{		
 		long start = Utils.time();
 		maxStart = Math.max(start, maxStart);
 		Event e = new Event(name, desc, start);
-
-		events.put(name, e);
+		List<Event> list = events.get(name);
+		if(list == null)
+		{
+			list = new LinkedList<>();
+			events.put(name, list);
+		}
+		list.add(e);
 		synchronized (eventList)
 		{
 			eventList.add(e);
 		}
-		return name;
+		return e;
 	}
 	
 	public void finish(String name)
 	{
 		long fin = Utils.time();
 		maxFinish = Math.max(fin, maxFinish);
-		
-		synchronized(events)
+		getFirstUnfinishedEvent(name).end = fin;
+	}
+	
+	private Event getFirstUnfinishedEvent(String name)
+	{
+		List<Event> list = events.get(name);
+		if(list == null)
 		{
-			events.get(name).end = fin;
+			return null;
 		}
+		for(Event e : list)
+		{
+			if(e.end == -1)
+			{
+				return e;
+			}
+		}
+		return null;
 	}
 
+	public void event(String name, String desc)
+	{
+		start(name, desc);
+		finish(name);
+	}
+	
 	public long getMaxStart()
 	{
 		return maxStart;
@@ -157,13 +173,14 @@ public class EventLogger implements Serializable
 	
 	public JFreeChart toGanttChart()
 	{
+		Random r = new Random();
 		long end = (Math.max(maxStart, maxFinish))+60;
 		
 		TaskSeries s1 = new TaskSeries("Events");
 		
 		for(Event e : eventList)
 		{
-			Task t = new Task(e.name,new SimpleTimePeriod(
+			Task t = new Task(e.name+' '+(char)r.nextInt(),new SimpleTimePeriod(
 					e.start * 1000,
 					e.end == -1 ? end*1000 : e.end*1000 + 50
 					));
@@ -174,8 +191,13 @@ public class EventLogger implements Serializable
 		
 		JFreeChart chart = ChartFactory.createGanttChart(
             "Event Chart",
-            "", "", collection
+            "", "", collection, false, true, false
         );
+		((CategoryPlot)chart.getPlot()).getRenderer().setBaseToolTipGenerator(
+				new IntervalCategoryToolTipGenerator(
+					"{3} - {4}", 
+					DateFormat.getDateTimeInstance(
+						DateFormat.SHORT, DateFormat.SHORT)));
 		return chart;
 	}
 	

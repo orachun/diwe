@@ -51,7 +51,12 @@ public class Task implements Serializable, Comparable<Task>, Savable
 
 	public Set<String> getInputFiles()
 	{
-		return new HashSet<>(inputs);
+		Set<String> files = new HashSet<>(inputs);
+		if(ckptFid!=null)
+		{
+			files.add(ckptFid);
+		}
+		return files;
 	}
 
 	public Set<String> getOutputFiles()

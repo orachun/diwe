@@ -12,11 +12,15 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import workflowengine.monitor.EventLogger.Event;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
+import static workflowengine.server.WorkflowExecutor.getRemoteExecutor;
 import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
@@ -36,8 +40,8 @@ public class SiteManager extends WorkflowExecutor
 	private final Object DISPATCH_LOCK = new Object();
 	private HashMap<String, RemoteWorker> remoteWorkers = new HashMap<>();
 	private ExecutorNetwork execNetwork = new ExecutorNetwork();
-	private TaskQueue taskQueue = new TaskQueue();
 	private final Map<String, Integer> remainingTasks = new ConcurrentHashMap<>();
+	private ExecutorService setTaskStatusThreadPool = Executors.newFixedThreadPool(5);
 	private Map<String, String> runningTasks = new ConcurrentHashMap<>(); // task -> processor
 
 	protected SiteManager() throws RemoteException
@@ -81,7 +85,7 @@ public class SiteManager extends WorkflowExecutor
 				
 				if(!wf.isSubworkflow())
 				{
-					eventLogger.start("WF_SUBMIT:" + wf.getUUID(), "");
+					eventLogger.start("WF_SUBMIT", "");
 					remainingTasks.put(wf.getUUID(), wf.getTotalTasks());
 				}
 				Utils.setProp(prop);
@@ -97,7 +101,7 @@ public class SiteManager extends WorkflowExecutor
 				
 				
 				//Wait for all input file exists
-				eventLogger.start("WF_INPUT_WAIT:" + wf.getUUID(), "Waiting for all input files");
+				eventLogger.start("WF_INPUT_WAIT", "Waiting for all input files");
 				logger.log("Waiting for all input files...");
 				for (String inputFileUUID : wf.getInputFiles())
 				{
@@ -113,22 +117,22 @@ public class SiteManager extends WorkflowExecutor
 					}
 				}
 				logger.log("Done.", false);
-				eventLogger.finish("WF_INPUT_WAIT:" + wf.getUUID());
+				eventLogger.finish("WF_INPUT_WAIT");
 
-				eventLogger.start("SCHEDULING:" + wf.getUUID(), "");
+				eventLogger.start("SCHEDULING", "");
 				logger.log("Scheduling the submitted workflow...");
 				Schedule s = thisSite.getScheduler().getSchedule(new SchedulingSettings(thisSite, wf, execNetwork, thisSite.getDefaultFC()));
 				s.save();
 				logger.log("Done.", false);
 				logger.log("Estimated makespan: " + s.getMakespan());
-				eventLogger.finish("SCHEDULING:" + wf.getUUID());
+				eventLogger.finish("SCHEDULING");
 
 				logger.log("Submit scheduled tasks into the queue...");
 				synchronized (DISPATCH_LOCK)
 				{
 					submitSchedule(s);
-					logger.log("Done.");
 				}
+				logger.log("Done.");
 				dispatchTask();
 			}
 		}.start();
@@ -177,32 +181,30 @@ public class SiteManager extends WorkflowExecutor
 			Map<String, Set<Workflow>> se = taskQueue.pollNextReadyTasks();
 			for (Map.Entry<String, Set<Workflow>> entry : se.entrySet())
 			{
-				String workerURI = entry.getKey();
-				final WorkflowExecutorInterface we = remoteWorkers.get(workerURI).getWorker();
+				String worker = entry.getKey();
+				final WorkflowExecutorInterface we = remoteWorkers.get(worker).getWorker();
 				for (final Workflow wf : entry.getValue())
 				{
-					logger.log("Dispatching subworkflow to " + workerURI + " ...");
+					logger.log("Dispatching subworkflow to " + worker + " ...");
 					wf.prepareRemoteSubmit();
 					we.submit(wf, null);
 					logger.log("Done");
 					for (String tid : wf.getTaskSet())
 					{
-						setTaskStatus(TaskStatus.dispatchedStatus(tid));
-						Task t = Task.get(tid);
-						if(t.getStatus().status == TaskStatus.STATUS_WAITING)
-						{
-							eventLogger.start("TASK_DISPATCH:" + t.getName() + tid, "");
-						}
+						TaskStatus status = TaskStatus.dispatchedStatus(tid);
+						setTaskStatus(status);
 					}
 				}
 			}
 		}
 	}
 
+	
+	
 	@Override
 	public void setTaskStatus(final TaskStatus status)
 	{
-		new Thread()
+		setTaskStatusThreadPool.submit(new Runnable()
 		{
 			@Override
 			public void run()
@@ -215,20 +217,6 @@ public class SiteManager extends WorkflowExecutor
 
 				if (status.status == TaskStatus.STATUS_EXECUTING)
 				{
-					String dispatchEventKey = "TASK_DISPATCH:" 
-							+ Task.get(status.taskID).getName() + status.taskID;
-					if(eventLogger.eventFinished(dispatchEventKey))
-					{
-						eventLogger.finish(dispatchEventKey);
-					}
-					
-					String execEventKey = "TASK_EXEC:" 
-							+ Task.get(status.taskID).getName() + status.taskID;
-					if(!eventLogger.hasEvent(execEventKey))
-					{
-						eventLogger.start(execEventKey, "");
-					}
-
 					//Inactivate file transferring if the file is not needed by any
 					//incompleted tasks
 					if (FileManager.get() instanceof DIFileManager)
@@ -240,7 +228,6 @@ public class SiteManager extends WorkflowExecutor
 				else if (status.status == TaskStatus.STATUS_COMPLETED)
 				{
 					runningTasks.remove(status.taskID);
-					eventLogger.finish("TASK_EXEC:" + Task.get(status.taskID).getName() + status.taskID);
 
 					//Upload output files
 					if (manager != null && FileManager.get() instanceof ServerClientFileManager)
@@ -261,15 +248,11 @@ public class SiteManager extends WorkflowExecutor
 					}
 
 					updateRemainTasks(status);
-					
 					rescheduleIfNeeded(status.schEntry.superWfid);
 				}
-
-
-				if (manager != null)
+				else if(status.status == TaskStatus.STATUS_SUSPENDED)
 				{
-					status.schEntry.target = SiteManager.this.uri;
-					manager.setTaskStatus(status);
+					runningTasks.remove(status.taskID);
 				}
 
 				if (status.status == TaskStatus.STATUS_COMPLETED && !taskQueue.isEmpty())
@@ -277,7 +260,13 @@ public class SiteManager extends WorkflowExecutor
 					dispatchTask();
 				}
 			}
-		}.start();
+		});
+		logTaskStatus(status);
+		if (manager != null)
+		{
+			status.schEntry.target = SiteManager.this.uri;
+			manager.setTaskStatus(status);
+		}
 	}
 
 	private void updateRemainTasks(TaskStatus status)
@@ -297,7 +286,7 @@ public class SiteManager extends WorkflowExecutor
 		{
 			Workflow wf = Workflow.get(status.schEntry.superWfid);
 			wf.setFinishedTime(Utils.time());
-			eventLogger.finish("WF_SUBMIT:" + status.schEntry.superWfid);
+			eventLogger.finish("WF_SUBMIT");
 			System.out.println(wf.getName()+" is finished");
 		}
 	}
@@ -436,12 +425,6 @@ public class SiteManager extends WorkflowExecutor
 	}
 
 	@Override
-	public String getTaskQueueHTML()
-	{
-		return taskQueue.toHTML();
-	}
-
-	@Override
 	public Set<String> getWorkerSet()
 	{
 		if (execNetwork == null)
@@ -482,34 +465,37 @@ public class SiteManager extends WorkflowExecutor
 	}
 	
 	@Override
-	public WorkflowFile suspend(String tid)
+	public Set<SuspendedTaskInfo> suspendRunningTasks()
 	{
-		String worker = runningTasks.get(tid);
-		if(worker == null)
+		Set<SuspendedTaskInfo> allSuspendedTasks = new HashSet<>();
+		for(String worker : getWorkerSet())
 		{
-			return null;
-		}
-		WorkflowFile ckptFile = getRemoteExecutor(worker).suspend(tid);
-		String superWfid = Task.get(tid).getSuperWfid();
-		if(manager != null)
-		{
-			try
+			Set<SuspendedTaskInfo> suspendedTasks = getRemoteExecutor(worker).suspendRunningTasks();
+			if(manager != null)
 			{
-				FileServer.request(
-						this.getWorkingDir(), 
-						ckptFile.getName(superWfid), 
-						FileServer.UPLOAD_REQ_TYPE, 
-						Utils.getProp("manager_host"), 
-						FileServer.DEFAULT_PORT);
+				for (SuspendedTaskInfo s : suspendedTasks)
+				{
+					String superWfid = Task.get(s.tid).getSuperWfid();
+					try
+					{
+						FileServer.request(
+								this.getWorkingDir(),
+								s.ckptFile.getName(superWfid),
+								FileServer.TYPE_UPLOAD_REQ,
+								Utils.getProp("manager_host"),
+								FileServer.getPort(Utils.getIntProp("manager_port")));
+					}
+					catch (IOException ex)
+					{
+						logger.log("Cannot upload checkpointed data.", ex);
+						return null;
+					}
+				}
 			}
-			catch (IOException ex)
-
-			{
-				logger.log("Cannot upload checkpointed data.", ex);
-				return null;
-			}
+			allSuspendedTasks.addAll(suspendedTasks);
 		}
-		return ckptFile;
+		
+		return allSuspendedTasks;
 	}
 	private long lastRescheduling = -1;
 	private boolean rescheduling = false;
@@ -519,8 +505,6 @@ public class SiteManager extends WorkflowExecutor
 		if(!rescheduling && Utils.time() - lastRescheduling > 10)
 		{
 			rescheduling = true;
-			System.out.println("Rescheduling...");
-			String eventKey = eventLogger.start("RESCH"+Utils.timeMillis(), "");
 			synchronized(DISPATCH_LOCK)
 			{
 				Workflow wf = Workflow.get(superWfid).getSubWorkflowOfRemainTasks();
@@ -528,30 +512,33 @@ public class SiteManager extends WorkflowExecutor
 				{
 					return;
 				}
+				System.out.println("Rescheduling...");
+				eventLogger.start("RESCH", "");
 
 				Schedule s = getScheduler().getSchedule(
 						new SchedulingSettings(this, wf, execNetwork, getDefaultFC()));
 				s.save();
-				taskQueue.update(s);
 
-				for(Map.Entry<String, String> entry : runningTasks.entrySet())
+				Set<SuspendedTaskInfo> suspendedTasks = suspendRunningTasks();
+				for(SuspendedTaskInfo sinfo : suspendedTasks)
 				{
-					String tid = entry.getKey();
-					String worker = entry.getValue();
-					WorkflowFile ckptFile = getRemoteExecutor(worker).suspend(tid);
-					if(ckptFile != null)
-					{
-						ckptFile.cache();
-						Task t = Task.get(tid);
-						t.setCkptFid(ckptFile.getUUID());
-						
-					}
+					sinfo.ckptFile.cache();
+					Task t = Task.get(sinfo.tid);
+					t.setCkptFid(sinfo.ckptFile.getUUID());
+					
 				}
+				
+				wf.generateInputOutputFileList();
+				removeWorkflowFromQueue(superWfid);
+				taskQueue.submit(s);
 			}
 			lastRescheduling = Utils.time();
-			System.out.println("Done.");
-			eventLogger.finish(eventKey);
 			rescheduling = false;
+			System.out.println("Done.");
+			eventLogger.finish("RESCH");
 		}
 	}
+
+	
+	
 }

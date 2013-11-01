@@ -26,6 +26,7 @@ public class Cacher
 		if(key != null && obj != null)
 		{
 			cache.put(key, obj);
+			keyQ.remove(key);
 			keyQ.add(key);
 			flush();
 		}

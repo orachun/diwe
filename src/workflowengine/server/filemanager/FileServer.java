@@ -28,8 +28,8 @@ public class FileServer
 {
 	private static final HashMap<Integer, FileServer> instants = new HashMap<>();
 	
-	public static final int UPLOAD_REQ_TYPE = 1;
-	public static final int DOWNLOAD_REQ_TYPE = 2;
+	public static final int TYPE_UPLOAD_REQ = 1;
+	public static final int TYPE_DOWNLOAD_REQ = 2;
 	private static final int PORT_SHIFT = 10;
 	public static final int DEFAULT_PORT = Utils.getIntProp("local_port")+PORT_SHIFT;
 	private int port;
@@ -72,6 +72,7 @@ public class FileServer
 			@Override
 			public void run()
 			{
+				System.out.println("File server started on port "+port);
 				while (true)
 				{
 					try
@@ -107,6 +108,10 @@ public class FileServer
 		return port;
 	}
 
+	public static int getPort(int port)
+	{
+		return port + PORT_SHIFT;
+	}
 	
 	
 	private void requestAccepted(Socket s) throws IOException
@@ -119,7 +124,7 @@ public class FileServer
 		byte[] fileNameBytes = new byte[fileNameLen];
 		in.read(fileNameBytes);
 		String filename = workingDir + '/' + new String(fileNameBytes);
-		if (type == UPLOAD_REQ_TYPE)
+		if (type == TYPE_UPLOAD_REQ)
 		{
 			FileOutputStream fos = new FileOutputStream(filename);
 			ReadableByteChannel inch = Channels.newChannel(in);
@@ -170,7 +175,7 @@ public class FileServer
 		filename = workingDir + '/' + filename;
 		
 		long bytesSent = 0;
-		if (type == DOWNLOAD_REQ_TYPE)
+		if (type == TYPE_DOWNLOAD_REQ)
 		{
 			FileOutputStream fos = new FileOutputStream(filename);
 			ReadableByteChannel inch = Channels.newChannel(in);

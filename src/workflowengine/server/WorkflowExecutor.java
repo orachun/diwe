@@ -21,6 +21,7 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
+import workflowengine.schedule.scheduler.CircularScheduler;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Checkpointing;
@@ -32,7 +33,6 @@ import workflowengine.workflow.Task;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFactory;
-import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -54,6 +54,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	protected int totalProcessors = 0;
 	protected double avgBandwidth = -1;
 	private String workingDir = Utils.getProp("working_dir");
+	protected TaskQueue taskQueue = new TaskQueue();
 //	protected Set<String> notFinishedWorkflows = new HashSet<>();
 	protected WorkflowExecutor()  //throws RemoteException
 	{
@@ -190,7 +191,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		{
 			Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
 			Scheduler s = (Scheduler) c.newInstance();
-			return s;
+//			return s;
+			return new CircularScheduler();
 		}
 		catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex)
 		{
@@ -313,22 +315,11 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	
 	
 	@Override
-	public void setTaskStatus(TaskStatus status)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
-
-	@Override
 	public String getManagerURI()  //throws RemoteException
 	{
 		return managerURI;
 	}
 
-	@Override
-	public void submit(Workflow wf, Properties prop)
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
 
 	@Override
 	public void submit(String dax, Properties prop)  //throws RemoteException
@@ -351,14 +342,14 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 				wf = WorkflowFactory.fromDAX(f.getAbsolutePath(), name);	
 			}
 			String input_dir = prop.getProperty("input_dir");
-			String workingDir = getWorkingDir()+"/"+wf.getSuperWfid();
-			Utils.mkdirs(workingDir);
-			Utils.cp(input_dir+"/*", workingDir);
+			String workflowDir = getWorkingDir()+"/"+wf.getSuperWfid();
+			Utils.mkdirs(workflowDir);
+			Utils.cp(input_dir+"/*", workflowDir);
 			submit(wf, prop);
 		}
 		catch (IOException ex)
 		{
-//			throw new RemoteException(ex.getMessage(), ex);
+			logger.log("Cannot submit the workflow.", ex);
 		}
 	}
 	
@@ -421,6 +412,79 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		return eventLogger;
 	}
 
+	
+	@Override
+	public String getTaskQueueHTML()
+	{
+		return taskQueue.toHTML();
+	}
+	
+	
+	
+	@Override
+	public String getWorkingDir()
+	{
+		return workingDir;
+	}
+
+	
+	
+	@Override
+	public void removeWorkflowFromQueue(String superWfid)
+	{
+		taskQueue.removeWorkflow(superWfid);
+		for(String worker : getWorkerSet())
+		{
+			getRemoteExecutor(worker).removeWorkflowFromQueue(superWfid);
+		}
+	}
+	
+	
+	public void logTaskStatus(TaskStatus status)
+	{
+		Task t = Task.get(status.taskID);
+		switch(status.status)
+		{
+			case TaskStatus.STATUS_DISPATCHED:
+//				eventLogger.event("DISPATCH: " + t.getName(), "");
+				break;
+			case TaskStatus.STATUS_EXECUTING:
+				eventLogger.start("EXEC: " + t.getName(), "");
+				break;
+			case TaskStatus.STATUS_FAIL:
+				eventLogger.finish("EXEC: " + t.getName());
+				break;
+			case TaskStatus.STATUS_COMPLETED:
+				eventLogger.finish("EXEC: " + t.getName());
+				break;
+			case TaskStatus.STATUS_SUSPENDED:
+				eventLogger.finish("EXEC: " + t.getName());
+				eventLogger.event("SUSP: "+t.getName(), "");
+				break;
+		}
+	}
+	
+	
+	
+	
+	
+	
+	// <editor-fold defaultstate="collapsed" desc="Not implemented methods">
+
+	
+	@Override
+	public void setTaskStatus(TaskStatus status)
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+
+	@Override
+	public void submit(Workflow wf, Properties prop)
+	{
+		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+	}
+	
+
 	@Override
 	public long getTransferredBytes()
 	{
@@ -434,33 +498,10 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	}
 
 	@Override
-	public WorkflowFile suspend(String tid)
+	public Set<SuspendedTaskInfo> suspendRunningTasks()
 	{
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
-	
-	
-	
-	
-	@Override
-	public String getWorkingDir()
-	{
-		return workingDir;
-	}
-
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	// <editor-fold defaultstate="collapsed" desc="Not implemented methods">
-
 	
 	
 	@Override
@@ -490,13 +531,6 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
 	}
 	
-	
-	
-	@Override
-	public String getTaskQueueHTML()  //throws RemoteException
-	{
-		throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-	}
 	
 
 	@Override

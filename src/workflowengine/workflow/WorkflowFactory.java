@@ -167,7 +167,7 @@ public class WorkflowFactory
 			throw new RuntimeException(e.getMessage());
 		}
 
-		wf.finalizeWorkflow();
+		wf.generateInputOutputFileList();
 		TaskRanker.rankTask(wf);
 		return wf;
 	}
@@ -272,7 +272,7 @@ public class WorkflowFactory
 			throw new RuntimeException(e.getMessage());
 		}
 
-		wf.finalizeWorkflow();
+		wf.generateInputOutputFileList();
 		TaskRanker.rankTask(wf);
 
 		System.gc();
