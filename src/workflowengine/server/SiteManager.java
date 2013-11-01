@@ -4,6 +4,7 @@
  */
 package workflowengine.server;
 
+import com.mongodb.BasicDBObject;
 import java.io.File;
 import java.io.IOException;
 import java.rmi.RemoteException;
@@ -14,12 +15,13 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import workflowengine.monitor.EventLogger.Event;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
+import workflowengine.schedule.ScheduleTable;
 import workflowengine.schedule.SchedulingSettings;
+import static workflowengine.server.WorkflowExecutor.COST_PER_BYTE;
 import static workflowengine.server.WorkflowExecutor.getRemoteExecutor;
 import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.server.filemanager.FileManager;
@@ -27,6 +29,7 @@ import workflowengine.server.filemanager.FileServer;
 import workflowengine.server.filemanager.ServerClientFileManager;
 import workflowengine.utils.Threading;
 import workflowengine.utils.Utils;
+import workflowengine.utils.db.MongoDB;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.Workflow;
 import workflowengine.workflow.WorkflowFile;
@@ -89,8 +92,7 @@ public class SiteManager extends WorkflowExecutor
 					remainingTasks.put(wf.getUUID(), wf.getTotalTasks());
 				}
 				Utils.setProp(prop);
-				wf.setSubmitted(Utils.time());
-//					wf.save();
+				wf.setSubmittedTime();
 				wf.finalizedRemoteSubmit();
 				wf.cache();
 				Utils.mkdirs((thisSite.getWorkingDir() + "/" + wf.getSuperWfid()));
@@ -123,8 +125,12 @@ public class SiteManager extends WorkflowExecutor
 				logger.log("Scheduling the submitted workflow...");
 				Schedule s = thisSite.getScheduler().getSchedule(new SchedulingSettings(thisSite, wf, execNetwork, thisSite.getDefaultFC()));
 				s.save();
+				
+				wf.setScheduledTime();
 				logger.log("Done.", false);
+				logger.log("Estimated cost: " + s.getCost());
 				logger.log("Estimated makespan: " + s.getMakespan());
+				logger.log("Cum time: " +wf.getCumulatedExecTime());
 				eventLogger.finish("SCHEDULING");
 
 				logger.log("Submit scheduled tasks into the queue...");
@@ -185,10 +191,10 @@ public class SiteManager extends WorkflowExecutor
 				final WorkflowExecutorInterface we = remoteWorkers.get(worker).getWorker();
 				for (final Workflow wf : entry.getValue())
 				{
-					logger.log("Dispatching subworkflow to " + worker + " ...");
+//					logger.log("Dispatching subworkflow to " + worker + " ...");
 					wf.prepareRemoteSubmit();
 					we.submit(wf, null);
-					logger.log("Done");
+//					logger.log("Done");
 					for (String tid : wf.getTaskSet())
 					{
 						TaskStatus status = TaskStatus.dispatchedStatus(tid);
@@ -229,16 +235,7 @@ public class SiteManager extends WorkflowExecutor
 				{
 					runningTasks.remove(status.taskID);
 
-					//Upload output files
-					if (manager != null && FileManager.get() instanceof ServerClientFileManager)
-					{
-						Set<String> outFiles = new HashSet<>();
-						for (String wff : Task.get(status.taskID).getOutputFiles())
-						{
-							outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
-						}
-						FileManager.get().outputFilesCreated(outFiles);
-					}
+					
 
 					//Inactivate file transferring if the file is not needed by any
 					//incompleted tasks
@@ -248,20 +245,35 @@ public class SiteManager extends WorkflowExecutor
 					}
 
 					updateRemainTasks(status);
-					rescheduleIfNeeded(status.schEntry.superWfid);
+					rescheduleIfNeeded(status);
 				}
 				else if(status.status == TaskStatus.STATUS_SUSPENDED)
 				{
 					runningTasks.remove(status.taskID);
 				}
 
-				if (status.status == TaskStatus.STATUS_COMPLETED && !taskQueue.isEmpty())
+				if (status.status == TaskStatus.STATUS_COMPLETED)
 				{
 					dispatchTask();
 				}
 			}
 		});
 		logTaskStatus(status);
+		
+		if (status.status == TaskStatus.STATUS_COMPLETED)
+		{
+//Upload output files
+			if (manager != null && FileManager.get() instanceof ServerClientFileManager)
+			{
+				Set<String> outFiles = new HashSet<>();
+				for (String wff : Task.get(status.taskID).getOutputFiles())
+				{
+					outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
+				}
+				FileManager.get().outputFilesCreated(outFiles);
+			}
+		}
+		
 		if (manager != null)
 		{
 			status.schEntry.target = SiteManager.this.uri;
@@ -272,7 +284,7 @@ public class SiteManager extends WorkflowExecutor
 	private void updateRemainTasks(TaskStatus status)
 	{
 		//Check if the workflow is completed or not
-		Integer remainTasks = null;
+		Integer remainTasks;
 		synchronized(remainingTasks)
 		{
 			remainTasks = remainingTasks.get(status.schEntry.superWfid);
@@ -285,9 +297,15 @@ public class SiteManager extends WorkflowExecutor
 		if(remainTasks != null && remainTasks.equals(0))
 		{
 			Workflow wf = Workflow.get(status.schEntry.superWfid);
-			wf.setFinishedTime(Utils.time());
+			wf.setCompletedTime();
+			double cost = getTotalCost();
 			eventLogger.finish("WF_SUBMIT");
 			System.out.println(wf.getName()+" is finished");
+			System.out.println("Cost: "+cost);
+			System.out.println("Makespan: "+(wf.getFinishedTime()-wf.getScheduledTime()));
+			
+			
+			wf.saveStat(cost);
 		}
 	}
 	
@@ -497,26 +515,63 @@ public class SiteManager extends WorkflowExecutor
 		
 		return allSuspendedTasks;
 	}
+	
+	
 	private long lastRescheduling = -1;
 	private boolean rescheduling = false;
-	public void rescheduleIfNeeded(String superWfid)
+	private static final double DELAY_TIME_THRESHOLD = 10;
+	private static final double PERCENT_COST_REDUCE_THRESHOLD = 10;
+	private static final double RESCHEDULING_INTERVAL = 10;
+	public void rescheduleIfNeeded(TaskStatus status)
 	{
 		//TODO: check when rescheduling is needed
-		if(!rescheduling && Utils.time() - lastRescheduling > 10)
+		if(rescheduling)
 		{
-			rescheduling = true;
-			synchronized(DISPATCH_LOCK)
+			return;
+		}
+		if(Utils.time() - lastRescheduling < RESCHEDULING_INTERVAL)
+		{
+			return;
+		}
+		
+		Task task = Task.get(status.taskID);
+		String superWfid = status.schEntry.superWfid;
+		ScheduleTable oldSch = ScheduleTable.getSchduleForWorkflow(superWfid);
+		
+		if(Math.abs(oldSch.getEstStartTime(status.taskID) - task.getStartTime()) < DELAY_TIME_THRESHOLD)
+		{
+			return;
+		}
+		if(Math.abs(oldSch.getEstFinishTime(status.taskID) - task.getFinishedTime()) < DELAY_TIME_THRESHOLD)
+		{
+			return;
+		}
+		
+		rescheduling = true;
+		Workflow oriWf = Workflow.get(superWfid);
+		double timeSinceStart = Utils.time() - oriWf.getScheduledTime();
+		double costSinceStart = getTotalCost();
+		
+		synchronized(DISPATCH_LOCK)
+		{
+			Workflow wf = Workflow.get(superWfid).getSubWorkflowOfRemainTasks();
+			if(wf.getTotalTasks() == 0)
 			{
-				Workflow wf = Workflow.get(superWfid).getSubWorkflowOfRemainTasks();
-				if(wf.getTotalTasks() == 0)
-				{
-					return;
-				}
-				System.out.println("Rescheduling...");
-				eventLogger.start("RESCH", "");
+				return;
+			}
+			System.out.println("Rescheduling...");
+			eventLogger.start("RESCH", "");
 
-				Schedule s = getScheduler().getSchedule(
-						new SchedulingSettings(this, wf, execNetwork, getDefaultFC()));
+			Schedule s = getScheduler().getSchedule(
+					new SchedulingSettings(this, wf, execNetwork, getDefaultFC()));
+			
+			double newCost = s.getCost() + costSinceStart + getMigrationCost();
+			double percentCostReduce = 100 * 
+					(oldSch.getCost() - newCost)
+					/oldSch.getCost();
+			System.out.println("Percent Reduce: "+percentCostReduce);
+			if(percentCostReduce > PERCENT_COST_REDUCE_THRESHOLD)
+			{
 				s.save();
 
 				Set<SuspendedTaskInfo> suspendedTasks = suspendRunningTasks();
@@ -525,19 +580,50 @@ public class SiteManager extends WorkflowExecutor
 					sinfo.ckptFile.cache();
 					Task t = Task.get(sinfo.tid);
 					t.setCkptFid(sinfo.ckptFile.getUUID());
-					
 				}
-				
+
 				wf.generateInputOutputFileList();
 				removeWorkflowFromQueue(superWfid);
 				taskQueue.submit(s);
 			}
-			lastRescheduling = Utils.time();
-			rescheduling = false;
-			System.out.println("Done.");
-			eventLogger.finish("RESCH");
 		}
+		lastRescheduling = Utils.time();
+		rescheduling = false;
+		System.out.println("Done.");
+		eventLogger.finish("RESCH");
 	}
+	
+	private double getMigrationCost()
+	{
+		double migrateCost = 0;
+		for(String runningTid : runningTasks.keySet())
+		{
+			double migrateFileSize = 0;
+			Task runningTask = Task.get(runningTid);
+			for(String wfid : runningTask.getInputFiles())
+			{
+				migrateFileSize += WorkflowFile.get(wfid).getSize();
+			}
+			for(String wfid : runningTask.getOutputFiles())
+			{
+				migrateFileSize += WorkflowFile.get(wfid).getSize();
+			}
+			migrateCost += COST_PER_BYTE*migrateFileSize;
+		}
+		return migrateCost;
+	}
+
+	@Override
+	public double getTotalCost()
+	{
+		double total = 0;
+		for(String worker : getWorkerSet())
+		{
+			total += getRemoteExecutor(worker).getTotalCost();
+		}
+		return total + COST_PER_BYTE * getTransferredBytes();
+	}
+	
 
 	
 	

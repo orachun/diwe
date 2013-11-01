@@ -4,9 +4,12 @@
  */
 package workflowengine.workflow;
 
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -18,6 +21,7 @@ import org.xml.sax.SAXException;
 import workflowengine.utils.db.DBException;
 import workflowengine.utils.Utils;
 import workflowengine.utils.XMLUtils;
+import workflowengine.utils.db.MongoDB;
 
 /**
  *
@@ -76,14 +80,11 @@ public class WorkflowFactory
 //                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//   
 //                    double runtime = Task.getRecordedExecTime(wf.getName(), idString+taskName);
 
-					double runtime = -1;
-					if (runtime == -1)
-					{
-						runtime = AVG_WORKLOAD;
-					}
-
 					String taskName = id + jobElement.getAttribute("name");
-					Task task = new Task(wf.getUUID(), taskName, "", runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
+					double runtime = getTaskExecTime(name, taskName);
+
+					Task task = new Task(wf.getUUID(), taskName, "", 
+							runtime, Utils.uuid(), TaskStatus.waitingStatus(null));
 
 					
 					for (WorkflowFile f : includedFiles)
@@ -91,8 +92,6 @@ public class WorkflowFactory
 						task.addInputFile(f);
 					}
 					
-
-
 					tasks.put(id, task);
 
 					NodeList fileNodeList = jobElement.getElementsByTagName("uses");
@@ -277,5 +276,28 @@ public class WorkflowFactory
 
 		System.gc();
 		return wf;
+	}
+	
+	
+	private static double getTaskExecTime(String workflowName, String taskName)
+	{
+		Iterator<DBObject> res = MongoDB.EXEC_TIME.aggregate(
+				new BasicDBObject("$group", 
+					new BasicDBObject("_id", "$task_name")
+						.append("exec_time", 
+							new BasicDBObject("$avg", "$exec_time")
+						)
+					),
+				new BasicDBObject("$match", 
+					new BasicDBObject("task_name", taskName)
+						.append("workflow_name", workflowName)
+					)
+				).results().iterator();
+
+		if(res.hasNext())
+		{
+			return (double)res.next().get("exec_time");
+		}
+		return AVG_WORKLOAD;
 	}
 }

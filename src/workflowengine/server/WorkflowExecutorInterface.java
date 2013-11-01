@@ -10,7 +10,6 @@ import workflowengine.monitor.EventLogger;
 import workflowengine.utils.HostAddress;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
-import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -49,6 +48,7 @@ public interface WorkflowExecutorInterface extends Remote
 	public Set<String> getWorkerSet() ; //throws RemoteException;
 	public String getStatusHTML() ; //throws RemoteException;
 	public long getUsage();
+	public double getTotalCost();
 	public long getTransferredBytes();
 	public EventLogger getEventLog();
 	

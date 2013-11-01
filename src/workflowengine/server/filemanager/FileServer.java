@@ -5,6 +5,7 @@
 package workflowengine.server.filemanager;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -140,7 +141,32 @@ public class FileServer
 		}
 		else
 		{
-			FileInputStream fis = new FileInputStream(filename);
+			int tries = 0;
+			FileInputStream fis = null;
+			while(true)
+			{
+				try
+				{
+					fis = new FileInputStream(filename);
+					break;
+				}
+				catch(FileNotFoundException e)
+				{
+					fis = null;
+					tries++;
+					if(tries == 5)
+					{
+						throw e;
+					}
+					try
+					{
+						Thread.sleep(100);
+					}
+					catch (InterruptedException ex)
+					{}
+				}
+			}
+			
 			WritableByteChannel outch = Channels.newChannel(out);
 			FileChannel fch = fis.getChannel();
 			long offset = 0;
@@ -201,6 +227,7 @@ public class FileServer
 			fis.close();
 		}
 		s.close();
+		
 		return bytesSent;
 	}
 }

@@ -18,7 +18,6 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
-import static workflowengine.server.WorkflowExecutor.getRemoteExecutor;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Utils;
@@ -82,9 +81,9 @@ public class Worker extends WorkflowExecutor
 			@Override
 			public void run()
 			{
-				logger.log("Workflow " + wf.getUUID() + " is submitted.");
+//				logger.log("Workflow " + wf.getUUID() + " is submitted.");
 				Utils.setProp(prop);
-				wf.setSubmitted(Utils.time());
+				wf.setSubmittedTime();
 				wf.finalizedRemoteSubmit();
 
 				for (String tid : wf.getTaskSet())
@@ -111,7 +110,7 @@ public class Worker extends WorkflowExecutor
 	private void waitForFile(String fid, String superWfid)
 	{
 		WorkflowFile wff = WorkflowFile.get(fid);
-		System.out.print("Waiting for " + wff.getName() + "...");
+//		System.out.print("Waiting for " + wff.getName() + "...");
 		FileManager.get().waitForFile(wff.getName(superWfid));
 		String fullFilePath = this.getWorkingDir() + "/"
 				+ wff.getName(superWfid);
@@ -121,7 +120,7 @@ public class Worker extends WorkflowExecutor
 		{
 			Utils.setExecutable(fullFilePath);
 		}
-		System.out.println("Done.");
+//		System.out.println("Done.");
 	}
 	
 	@Override
@@ -188,14 +187,6 @@ public class Worker extends WorkflowExecutor
 				
 				if (taskCompleted)
 				{
-					//Upload output files
-					Set<String> outFiles = new HashSet<>();
-					for (String wff : Task.get(status.taskID).getOutputFiles())
-					{
-						outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
-					}
-					FileManager.get().outputFilesCreated(outFiles);
-
 					workingProcessors--;
 					runningTasks.remove(status.taskID);
 				}
@@ -217,6 +208,19 @@ public class Worker extends WorkflowExecutor
 				}
 			}
 		});
+		
+		
+		if (status.status == TaskStatus.STATUS_COMPLETED)
+		{
+			//Upload output files
+			Set<String> outFiles = new HashSet<>();
+			for (String wff : Task.get(status.taskID).getOutputFiles())
+			{
+				outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
+			}
+			FileManager.get().outputFilesCreated(outFiles);
+		}
+		
 		logTaskStatus(status);
 		manager.setTaskStatus(status);
 	}
@@ -307,4 +311,10 @@ public class Worker extends WorkflowExecutor
 		taskQueue.removeWorkflow(superWfid);
 	}
 	
+	@Override
+	public double getTotalCost()
+	{
+		return (COST_PER_SECOND * getUsage()) + 
+				(COST_PER_BYTE * getTransferredBytes());
+	}
 }

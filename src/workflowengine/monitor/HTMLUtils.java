@@ -14,4 +14,13 @@ public class HTMLUtils
 	{
 		return html.replace("\n", "<br/>");
 	}
+	
+	public static String icon(String html)
+	{
+		return html
+				.replace("[[W]]", "")
+				.replace("[[E]]", "")
+				.replace("[[F]]", "")
+				.replace("[C]", "");
+	}
 }

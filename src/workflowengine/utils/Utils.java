@@ -9,7 +9,6 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -20,9 +19,10 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.Serializable;
-import java.lang.reflect.Array;
 import java.net.Socket;
+import java.text.DateFormat;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -733,5 +733,12 @@ public class Utils
 	public static String getFileFromWildcard(String filepath)
 	{
 		return fileFromWildcard(filepath)[0].getAbsolutePath();
+	}
+	
+	private static DateFormat timeFormatter =
+			DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM);
+	public static String formatDateTime(long seconds)
+	{
+		return timeFormatter.format(new Date(seconds*1000));
 	}
 }

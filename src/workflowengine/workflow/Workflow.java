@@ -70,13 +70,13 @@ public class Workflow implements Serializable, Savable
 
 	public void createDummyInputFiles()
 	{
-		String superWfid = getSuperWfid();
+		String wfid = getSuperWfid();
 		for (String fuuid : this.inputFiles)
 		{
 			WorkflowFile f = WorkflowFile.get(fuuid);
 			if (!f.getName().equals("dummy"))
 			{
-				String outfile = Utils.getProp("working_dir") + "/" + f.getName(superWfid);
+				String outfile = Utils.getProp("working_dir") + "/" + f.getName(wfid);
 				File file = new File(outfile);
 				file.getParentFile().mkdirs();
 				Utils.bash("truncate --size " + (int) (Math.round(f.getSize())) + " " + outfile, false);
@@ -181,24 +181,25 @@ public class Workflow implements Serializable, Savable
 		return w;
 	}
 
-	public long getStartTime()
-	{
-		return startTime;
-	}
-
-	public void setStartTime(long startTime)
-	{
-		this.startTime = startTime;
-	}
+//	public long getStartTime()
+//	{
+//		return startTime;
+//	}
+//
+//	public void setStartTime()
+//	{
+//		this.startTime = Utils.time();
+//	}
 
 	public long getScheduledTime()
 	{
 		return scheduledTime;
 	}
 
-	public void setScheduledTime(long scheduledTime)
+	public void setScheduledTime()
 	{
-		this.scheduledTime = scheduledTime;
+		this.scheduledTime = Utils.time();
+		setStatus(STATUS_SCHEDULED);
 	}
 
 	public long getFinishedTime()
@@ -206,9 +207,10 @@ public class Workflow implements Serializable, Savable
 		return finishedTime;
 	}
 
-	public void setFinishedTime(long finishedTime)
+	public void setCompletedTime()
 	{
-		this.finishedTime = finishedTime;
+		this.finishedTime = Utils.time();
+		setStatus(STATUS_COMPLETED);
 	}
 
 	public long getEstimatedFinishedTime()
@@ -231,9 +233,15 @@ public class Workflow implements Serializable, Savable
 		this.status = status;
 	}
 
-	public void setSubmitted(long submitted)
+	public void setSubmittedTime()
 	{
-		this.submitted = submitted;
+		this.submitted = Utils.time();
+		setStatus(STATUS_SUBMITTED);
+	}
+
+	public long getSubmittedTime()
+	{
+		return submitted;
 	}
 
 	public static boolean isFinished()
@@ -546,5 +554,17 @@ public class Workflow implements Serializable, Savable
 			}
 		}
 		return getSubworkflow(this.name, remainTasks);
+	}
+	
+	public void saveStat(double totalCost)
+	{
+		MongoDB.WORKFLOW_SUBMIT_INFO.insert(new BasicDBObject()
+				.append("workflow_name", getName())
+				.append("submited", Utils.formatDateTime(getSubmittedTime()))
+				.append("scheduled", Utils.formatDateTime(getScheduledTime()))
+				.append("completed", Utils.formatDateTime(getFinishedTime()))
+				.append("makespan", getFinishedTime()-getScheduledTime())
+				.append("cost", totalCost)
+				);
 	}
 }

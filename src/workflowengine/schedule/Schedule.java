@@ -1,13 +1,13 @@
 package workflowengine.schedule;
 
-import com.mongodb.BasicDBObject;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import workflowengine.utils.db.Cacher;
-import workflowengine.utils.db.MongoDB;
+import java.util.Set;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.workflow.Task;
 import workflowengine.workflow.WorkflowFile;
 
@@ -36,6 +36,7 @@ public class Schedule
         mapAllTaskToFirstWorker();
         edited = true;
     }
+	
 
     public SchedulingSettings getSettings()
     {
@@ -119,7 +120,7 @@ public class Schedule
         if(edited)
         {
             calMakespan();
-            calCost();
+//            calCost();
         }
         edited = false;
         this.fitness = this.settings.getFc().getFitness(this);
@@ -136,72 +137,92 @@ public class Schedule
 
     private void calMakespan()
     {
-//		HashMap<String, Double> workerReadyTime = new HashMap<>(
-//				settings.getExecNetwork().getExecutorURISet().size());
         LinkedList<String> finishedTasks = new LinkedList<>();
         estimatedStart.clear();
         estimatedFinish.clear();
 
-        for (String taskUUID : settings.getFixedTasks())
-        {
-            estimatedStart.put(taskUUID, 0.0);
-            estimatedFinish.put(taskUUID, 0.0);
-        }
-
-        finishedTasks.addAll(settings.getFixedTasks());
-//		for(String worker : settings.getExecNetwork().getExecutorURISet())
-//		{
-//			workerReadyTime.put(worker, 0.0);
-//		}
+//        for (String tid : settings.getFixedTasks())
+//        {
+//            estimatedStart.put(tid, 0.0);
+//            estimatedFinish.put(tid, 0.0);
+//        }
+//        finishedTasks.addAll(settings.getFixedTasks());
+		
+		HashMap<String, Set<String>> existingFiles = new HashMap<>();
+		for(String worker : settings.getSiteArray())
+		{
+			existingFiles.put(worker, new HashSet<String>());
+		}
 		
         makespan = 0;
+		cost = 0;
         Queue<String> pendingTasks = settings.getWorkflow().getTaskQueueByOrder();
         while (!pendingTasks.isEmpty())
         {
-            String taskUUID = pendingTasks.poll();
-            if (finishedTasks.contains(taskUUID))
+            String tid = pendingTasks.poll();
+            if (finishedTasks.contains(tid))
             {
                 continue;
             }
-            if (!finishedTasks.containsAll(settings.getWorkflow().getParent(taskUUID)))
+            if (!finishedTasks.containsAll(settings.getWorkflow().getParent(tid)))
             {
-                pendingTasks.add(taskUUID);
+                pendingTasks.add(tid);
                 continue;
             }
 
-            String worker = this.getWorkerForTask(taskUUID);
+            String worker = this.getWorkerForTask(tid);
+			Set<String> fileSet = existingFiles.get(worker);
 			Site site = settings.getSite(worker);
-//            double serverReadyTime = workerReadyTime.get(worker);
 			double serverReadyTime = site.getAvailableTime(makespan);
             double parentFinishTime = 0;
-            for (String parentTaskUUID : settings.getWorkflow().getParent(taskUUID))
+            for (String parentTid : settings.getWorkflow().getParent(tid))
             {
-                parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(parentTaskUUID));
+                parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(parentTid));
             }
+			
             double taskStartTime = Math.max(parentFinishTime, serverReadyTime);
-            double taskFinishTime = taskStartTime + Task.get(taskUUID).getEstimatedExecTime();
-            
-            for (String childTaskUUID : settings.getWorkflow().getChild(taskUUID))
-            {
-                String workerForC = this.getWorkerForTask(childTaskUUID);
-                if(!worker.equals(workerForC))
-                {
-					for(String wff : Task.get(taskUUID).getOutputFileUUIDsForTask(childTaskUUID))
-					{
-						WorkflowFile f = (WorkflowFile)Cacher.get(WorkflowFile.class, wff);
-						taskFinishTime += settings.getExecNetwork()
-								.getTransferTime(worker, workerForC, f.getSize());
-					}
-                }
-            }
-            
+			
+			Task t = Task.get(tid);
+			cost += WorkflowExecutor.COST_PER_SECOND * t.getEstimatedExecTime();
+			
+			//Add input file stage-in time
+			for(String fid : t.getInputFiles())
+			{
+				if(!fileSet.contains(fid))
+				{
+					double fileSize = WorkflowFile.get(fid).getSize();
+					taskStartTime += settings.getExecNetwork().getTransferTime(
+						worker, 
+						fileSize
+						);
+					fileSet.add(fid);
+					
+					//Add input file stage-in cost
+					cost += WorkflowExecutor.COST_PER_BYTE * fileSize;
+				}
+			}
+			
+			
+			
+            double taskFinishTime = taskStartTime + t.getEstimatedExecTime();
+			
+			//Add output file stage-out time
+			Set<String> outputFiles = t.getOutputFiles();
+			taskFinishTime += settings.getExecNetwork().getTransferTime(worker, outputFiles);
+			fileSet.addAll(outputFiles);
+			
+			//Add output file stage-out cost
+			for(String fid : outputFiles)
+			{
+				cost += WorkflowExecutor.COST_PER_BYTE * WorkflowFile.get(fid).getSize();
+			}
+			
 			site.scheduleJob(taskStartTime, taskFinishTime);
 			
-            estimatedStart.put(taskUUID, taskStartTime);
-            estimatedFinish.put(taskUUID, taskFinishTime);
-//			workerReadyTime.put(worker, taskFinishTime);
+            estimatedStart.put(tid, taskStartTime);
+            estimatedFinish.put(tid, taskFinishTime);
             makespan = Math.max(makespan, taskFinishTime);
-            finishedTasks.add(taskUUID);
+            finishedTasks.add(tid);
         }
     }
 
@@ -290,19 +311,22 @@ public class Schedule
 	
 	public void save()
 	{
-		for(Map.Entry<String, String>  entry : mapping.entrySet())
-		{
-			String tid = entry.getKey();
-			String wkid = entry.getValue();
-			
-			MongoDB.SCHEDULE.update(new BasicDBObject("tid", tid), 
-					new BasicDBObject("tid", tid)
-					.append("wkid", wkid)
-					.append("estimated_start", estimatedStart.get(tid))
-					.append("estimated_finish", estimatedFinish.get(tid))
-					.append("wfid", settings.getWorkflow().getSuperWfid())
-					, true, false);
-		}
+//		for(Map.Entry<String, String>  entry : mapping.entrySet())
+//		{
+//			String tid = entry.getKey();
+//			String wkid = entry.getValue();
+//			
+//			MongoDB.SCHEDULE.update(new BasicDBObject("tid", tid), 
+//					new BasicDBObject("tid", tid)
+//					.append("wkid", wkid)
+//					.append("estimated_start", estimatedStart.get(tid))
+//					.append("estimated_finish", estimatedFinish.get(tid))
+//					.append("wfid", settings.getWorkflow().getSuperWfid())
+//					, true, false);
+//		}
+		ScheduleTable scht = getScheduleTable();
+		scht.cache();
+		scht.save();
 	}
 	
 	public String getWorkflowID()
@@ -310,7 +334,13 @@ public class Schedule
 		return settings.getWorkflow().getUUID();
 	}
 	
-	
+	public ScheduleTable getScheduleTable()
+	{
+		ScheduleTable scht = new ScheduleTable(settings.getWorkflow().getSuperWfid(), settings.getWorkflow().getUUID(), mapping, estimatedStart, estimatedFinish);
+		scht.setCost(cost);
+		scht.setMakespan(makespan);
+		return scht;
+	}
 }
 
 

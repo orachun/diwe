@@ -42,10 +42,34 @@ public class ExecutorNetwork
 		return workers.get(weURI);
 	}
 	
-	public double getTransferTime(String to, double sizeInMB)
+	
+	public double getTransferTime(String worker, double sizeInBytes)
 	{
-		return getLinkToWorker(to).getTransferTime(sizeInMB);
+		return getLinkToWorker(worker).getTransferTime(sizeInBytes);
 	}
+	
+	public double getTransferTime(String worker, Collection wff)
+	{
+		double totalSize = 0;
+		for(Object o : wff)
+		{
+			WorkflowFile f;
+			if(o instanceof String)
+			{
+				f = (WorkflowFile)Cacher.get(WorkflowFile.class, o);
+			}
+			else
+			{
+				f = (WorkflowFile)o;
+			}
+			totalSize += f.getSize();
+		}
+		return getTransferTime(worker, totalSize);
+	}
+	
+	
+	
+	
 	public double getTransferTime(String from, String to, double sizeInMB)
 	{
 		if(from.equals(to))
@@ -55,6 +79,8 @@ public class ExecutorNetwork
 		double mbps = Math.min(getLinkToWorker(to).MBps, getLinkToWorker(from).MBps);
 		return sizeInMB/mbps;
 	}
+	
+	
 	public double getTransferTime(String from, String to, Collection wff)
 	{
 		double totalSize = 0;
@@ -75,6 +101,7 @@ public class ExecutorNetwork
 	}
 	
 	
+	
 	private double linkSpdTest(String to)
 	{
 		//TODO: implement this
@@ -88,7 +115,7 @@ public class ExecutorNetwork
 //			total += 102400000.0/(Utils.timeMillis()-startTime);
 //		}
 //		return total/1.0;
-		return 1;
+		return 1.7;
 	}
 	
 	public double getLinkSpd(String to)

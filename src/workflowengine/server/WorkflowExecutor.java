@@ -4,6 +4,7 @@
  */
 package workflowengine.server;
 
+import com.mongodb.BasicDBList;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import java.io.File;
@@ -18,9 +19,9 @@ import workflowengine.utils.HostAddress;
 import workflowengine.monitor.EventLogger;
 import workflowengine.monitor.HTMLUtils;
 import workflowengine.resource.RemoteWorker;
+import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
-import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.schedule.scheduler.CircularScheduler;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
@@ -43,6 +44,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	public static final char FROM_WORKER = 'W';
 	public static final char FROM_MANAGER = 'M';
 	public static final char FROM_SELF = 'S';
+	public static final double COST_PER_SECOND = 0.001;
+	public static final double COST_PER_BYTE = 0.00000001;
 	
 	protected static WorkflowExecutor instant;
 	protected WorkflowExecutorInterface manager;
@@ -203,7 +206,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 
 	protected FC getDefaultFC()
 	{
-		return new MakespanFC();
+		return new CostOptimizationFC();
 	}
 
 	public String getURI()
@@ -238,8 +241,15 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		while(cursor.hasNext())
 		{
 			DBObject o = cursor.next();
-			mapping.put((String)o.get("tid"), (String)o.get("wkid"));
+			BasicDBList list = (BasicDBList)o.get("mapping");
+			for(Object lo : list)
+			{
+				DBObject obj = (DBObject)lo;
+				mapping.put((String)obj.get("tid"), (String)obj.get("wkid"));
+			}
 		}
+		
+		
 		
 		StringBuilder mappingHTML = new StringBuilder();
 		for(Map.Entry<String, String> entry : mapping.entrySet())
@@ -464,6 +474,10 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		}
 	}
 	
+	public double getTotalCost()
+	{
+		throw new RuntimeException("not implemented yet");
+	}
 	
 	
 	

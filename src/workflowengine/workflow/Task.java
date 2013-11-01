@@ -7,6 +7,7 @@ import java.io.Serializable;
 import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
+import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
 import workflowengine.utils.db.MongoDB;
 import workflowengine.utils.db.Savable;
@@ -27,6 +28,9 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	private double priority = 1;
 	private String superWfid;
 	private String ckptFid = null;
+	
+	private double startTime = -1;
+	private double completedTime = -1;
 
 	public Task(String superWfid, String name, String cmd, double estimateExecTime, String uuid, TaskStatus status)
 	{
@@ -82,6 +86,22 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	public void setStatus(TaskStatus s)
 	{
 		this.status = s;
+		if(status.status == TaskStatus.STATUS_EXECUTING)
+		{
+			startTime = Utils.time();
+		}
+		else if(status.status == TaskStatus.STATUS_COMPLETED)
+		{
+			completedTime = Utils.time();
+			Workflow wf = Workflow.get(superWfid);
+			if(wf != null)
+			{
+				MongoDB.EXEC_TIME.insert(new BasicDBObject()
+						.append("workflow_name", wf.getName())
+						.append("task_name", name)
+						.append("exec_time", Math.max(1,completedTime - startTime)));
+			}
+		}
 	}
 
 	@Override
@@ -181,6 +201,18 @@ public class Task implements Serializable, Comparable<Task>, Savable
 		return ckptFid;
 	}
 
+	public double getStartTime()
+	{
+		return startTime;
+	}
+
+	public double getFinishedTime()
+	{
+		return completedTime;
+	}
+	
+	
+
 	
 	
 	public static Task get(String taskUUID)
@@ -211,6 +243,8 @@ public class Task implements Serializable, Comparable<Task>, Savable
 				s);
 		t.ckptFid = (String)obj.get("ckpt_fid");
 		t.setPriority((double) obj.get("priority"));
+		t.startTime = (double)obj.get("start_time");
+		t.completedTime = (double)obj.get("completed_time");
 		BasicDBList inputs = (BasicDBList) obj.get("input");
 		for (Object o : inputs)
 		{
@@ -228,7 +262,6 @@ public class Task implements Serializable, Comparable<Task>, Savable
 	@Override
 	public void save()
 	{
-
 		BasicDBList inputList = new BasicDBList();
 		BasicDBList outputList = new BasicDBList();
 		inputs.addAll(getInputFiles());
@@ -246,7 +279,9 @@ public class Task implements Serializable, Comparable<Task>, Savable
 				.append("input", inputList)
 				.append("output", outputList)
 				.append("super_wfid", superWfid)
-				.append("ckpt_fid", ckptFid);
+				.append("ckpt_fid", ckptFid)
+				.append("start_time", startTime)
+				.append("completed_time", completedTime);
 		MongoDB.TASK.update(new BasicDBObject("tid", uuid), obj, true, false);
 
 	}

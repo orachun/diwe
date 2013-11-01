@@ -92,7 +92,7 @@ public class ExecutingProcessor
 						else
 						{
 							ts = ts.fail(ret, "Error: return value is "+ret+".");
-							manager.logger.log("Error: Task "+t.getName()+ " is "+ret+".");
+							manager.logger.log("Error: Task "+t.getName()+ " returns "+ret+".");
 							String dir = manager.getWorkingDir() + "/" + se.superWfid;
 							Utils.printFileContent(dir + "/" + t.getName()+"_"+t.getUUID() + ".stdout");
 							Utils.printFileContent(dir + "/" + t.getName()+"_"+t.getUUID() + ".stderr");
@@ -198,12 +198,12 @@ public class ExecutingProcessor
 		{
 			synchronized(SUSPEND_LOCK)
 			{
-				System.out.println("Suspending current task...");
 				if(isSuspended || Utils.isProcTerminated(currentProcess))
 				{
 					return null;
 				}
 				isSuspended = true;
+				System.out.println("Suspending current task...");
 				Checkpointing.checkpoint();
 				currentProcess.destroy();
 				

@@ -23,6 +23,8 @@ public class MongoDB
 	public static DBCollection TASK;
 	public static DBCollection WF_FILE;
 	public static DBCollection SCHEDULE;
+	public static DBCollection EXEC_TIME;
+	public static DBCollection WORKFLOW_SUBMIT_INFO;
 	
 	public static boolean prepare()
 	{
@@ -43,6 +45,15 @@ public class MongoDB
 			TASK = db.getCollection("task");
 			WF_FILE = db.getCollection("wf_file");
 			SCHEDULE = db.getCollection("schedule");
+			
+			
+			db = new Mongo(
+					Utils.getProp("DBHost"), 
+					Utils.getIntProp("DBPort"))
+					.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_')+"_stats");
+			EXEC_TIME = db.getCollection("execution_time");
+			WORKFLOW_SUBMIT_INFO = db.getCollection("workflow_submit_info");
+			
 			
 			return true;
 		}
