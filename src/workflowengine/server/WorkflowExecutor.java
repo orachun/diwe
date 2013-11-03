@@ -194,8 +194,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		{
 			Class c = ClassLoader.getSystemClassLoader().loadClass(Utils.getProp("scheduler").trim());
 			Scheduler s = (Scheduler) c.newInstance();
-//			return s;
-			return new CircularScheduler();
+			return s;
+//			return new CircularScheduler();
 		}
 		catch (ClassNotFoundException | IllegalAccessException | InstantiationException ex)
 		{
@@ -394,6 +394,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 					}
 				}
 //				Cacher.saveAll();
+				Checkpointing.stopCoordinator();
 				System.out.println("Done.");
 				System.exit(0);
 			}

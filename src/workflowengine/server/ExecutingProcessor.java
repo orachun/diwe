@@ -24,6 +24,7 @@ public class ExecutingProcessor
 	private Process currentProcess;
 	private Task currentTask;
 	private ScheduleEntry currentSE;
+	private long firstSubmitTime = -1;
 	private long usage = 0;
 	private final Object SUSPEND_LOCK = new Object();
 	private boolean isSuspended = false;
@@ -40,7 +41,11 @@ public class ExecutingProcessor
 			manager.logger.log("ERROR: executing another process.");
 			return null;
 		}
-		long start = Utils.time();
+		if(firstSubmitTime == -1)
+		{
+			firstSubmitTime = Utils.time();
+		}
+//		long start = Utils.time();
 		this.currentTask = t;
 		this.currentSE = se;
 		TaskStatus ts = TaskStatus.executingStatus(se);
@@ -111,7 +116,8 @@ public class ExecutingProcessor
 		
 		manager.setTaskStatus(ts);
 		
-		usage += (Utils.time() - start);
+//		usage += (Utils.time() - start);
+		usage = Utils.time() - firstSubmitTime;
 		currentProcess = null;
 		currentTask = null;
 		currentSE = null;

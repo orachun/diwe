@@ -214,7 +214,7 @@ public class SiteManager extends WorkflowExecutor
 		{
 			@Override
 			public void run()
-			{
+			{try{
 				final Task t = Task.get(status.taskID);
 				synchronized (DISPATCH_LOCK)
 				{
@@ -255,7 +255,7 @@ public class SiteManager extends WorkflowExecutor
 				if (status.status == TaskStatus.STATUS_COMPLETED)
 				{
 					dispatchTask();
-				}
+				}}catch(Exception e){e.printStackTrace();}
 			}
 		});
 		logTaskStatus(status);
@@ -475,10 +475,10 @@ public class SiteManager extends WorkflowExecutor
 	{
 		long transferredBytes = FileManager.get().getTransferredBytes();
 		
-		for(String worker : getWorkerSet())
-		{
-			transferredBytes += getRemoteExecutor(worker).getTransferredBytes();
-		}
+//		for(String worker : getWorkerSet())
+//		{
+//			transferredBytes += getRemoteExecutor(worker).getTransferredBytes();
+//		}
 		return transferredBytes;
 	}
 	
@@ -565,10 +565,19 @@ public class SiteManager extends WorkflowExecutor
 			Schedule s = getScheduler().getSchedule(
 					new SchedulingSettings(this, wf, execNetwork, getDefaultFC()));
 			
-			double newCost = s.getCost() + costSinceStart + getMigrationCost();
+			
+			double migrationCost = getMigrationCost();
+			double newCost = s.getCost() + costSinceStart + migrationCost;
 			double percentCostReduce = 100 * 
 					(oldSch.getCost() - newCost)
 					/oldSch.getCost();
+			
+			System.out.println("New sch cost: "+s.getCost());
+			System.out.println("Current cost: "+costSinceStart);
+			System.out.println("Migration cost: "+migrationCost);
+			System.out.println("New cost: "+newCost);
+			System.out.println("Old cost: "+oldSch.getCost());
+			
 			System.out.println("Percent Reduce: "+percentCostReduce);
 			if(percentCostReduce > PERCENT_COST_REDUCE_THRESHOLD)
 			{
@@ -621,7 +630,11 @@ public class SiteManager extends WorkflowExecutor
 		{
 			total += getRemoteExecutor(worker).getTotalCost();
 		}
-		return total + COST_PER_BYTE * getTransferredBytes();
+		System.out.println("Workers' Cost: "+total);
+		System.out.println("Transfer cost: "+COST_PER_BYTE * getTransferredBytes());
+		total = total + COST_PER_BYTE * getTransferredBytes();
+		
+		return total;
 	}
 	
 

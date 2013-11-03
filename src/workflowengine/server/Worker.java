@@ -18,6 +18,8 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.schedule.SchedulingSettings;
+import static workflowengine.server.WorkflowExecutor.COST_PER_BYTE;
+import static workflowengine.server.WorkflowExecutor.COST_PER_SECOND;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Utils;
@@ -314,6 +316,8 @@ public class Worker extends WorkflowExecutor
 	@Override
 	public double getTotalCost()
 	{
+//		System.out.println("Usage cost: "+COST_PER_SECOND * getUsage());
+//		System.out.println("Tx cost: "+COST_PER_BYTE * getTransferredBytes());
 		return (COST_PER_SECOND * getUsage()) + 
 				(COST_PER_BYTE * getTransferredBytes());
 	}

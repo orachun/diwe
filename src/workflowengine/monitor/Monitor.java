@@ -177,7 +177,7 @@ public class Monitor extends JFrame
 	
 	public static void main(String[] args) throws NotBoundException, RemoteException
 	{
-		new Monitor("10.217.168.205:9900");
+		new Monitor(args[0]);
 	}
 	
 	class ChangeServerActionListener implements ActionListener

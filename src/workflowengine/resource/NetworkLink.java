@@ -28,7 +28,7 @@ public class NetworkLink
 	
 	public double getTransferTime(double fileSizeInBytes)
 	{
-		return fileSizeInBytes/1024.0/(MBps);
+		return fileSizeInBytes/1024.0/1024.0/(MBps);
 	}
 	public double getTransferTime(WorkflowFile wff)
 	{

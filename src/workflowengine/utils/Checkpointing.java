@@ -17,7 +17,7 @@ public class Checkpointing
 	
 	public static void startCoordinator()
 	{
-		bash("dmtcp_coordinator --background "+Utils.getProp("DMTCP_port"), false);
+		bash("dmtcp_coordinator --daemon "+Utils.getProp("DMTCP_port"), false);
 		command("k");
 	}
 	

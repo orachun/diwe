@@ -183,7 +183,6 @@ public class Schedule
             double taskStartTime = Math.max(parentFinishTime, serverReadyTime);
 			
 			Task t = Task.get(tid);
-			cost += WorkflowExecutor.COST_PER_SECOND * t.getEstimatedExecTime();
 			
 			//Add input file stage-in time
 			for(String fid : t.getInputFiles())
@@ -198,11 +197,11 @@ public class Schedule
 					fileSet.add(fid);
 					
 					//Add input file stage-in cost
-					cost += WorkflowExecutor.COST_PER_BYTE * fileSize;
+					cost += (WorkflowExecutor.COST_PER_BYTE * fileSize);
 				}
 			}
-			
-			
+						
+//			cost += WorkflowExecutor.COST_PER_SECOND * t.getEstimatedExecTime();
 			
             double taskFinishTime = taskStartTime + t.getEstimatedExecTime();
 			
@@ -214,7 +213,7 @@ public class Schedule
 			//Add output file stage-out cost
 			for(String fid : outputFiles)
 			{
-				cost += WorkflowExecutor.COST_PER_BYTE * WorkflowFile.get(fid).getSize();
+				cost += (WorkflowExecutor.COST_PER_BYTE * WorkflowFile.get(fid).getSize());
 			}
 			
 			site.scheduleJob(taskStartTime, taskFinishTime);
@@ -224,6 +223,10 @@ public class Schedule
             makespan = Math.max(makespan, taskFinishTime);
             finishedTasks.add(tid);
         }
+		
+//		System.out.println("Est Tx cost: "+cost);
+//		System.out.println("Ext exec cost: "+(WorkflowExecutor.COST_PER_SECOND * makespan * settings.getTotalWorkers()));
+		cost += (WorkflowExecutor.COST_PER_SECOND * makespan * settings.getTotalWorkers());
     }
 
     private void calCost()
@@ -324,6 +327,7 @@ public class Schedule
 //					.append("wfid", settings.getWorkflow().getSuperWfid())
 //					, true, false);
 //		}
+		evaluate();
 		ScheduleTable scht = getScheduleTable();
 		scht.cache();
 		scht.save();
