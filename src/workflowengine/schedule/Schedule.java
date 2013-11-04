@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.Set;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.workflow.Task;
@@ -344,6 +345,17 @@ public class Schedule
 		scht.setCost(cost);
 		scht.setMakespan(makespan);
 		return scht;
+	}
+	
+	public void random()
+	{
+		Random r = new Random();
+		String[] workers = settings.getSiteArray();
+		String[] tasks = settings.getTaskArray();
+		for(int i=0;i<tasks.length;i++)
+		{
+			setWorkerForTask(tasks[i], workers[r.nextInt(workers.length)]);
+		}
 	}
 }
 

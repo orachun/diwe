@@ -19,6 +19,7 @@ public class ScheduleComparator implements Comparator<Schedule>
     {
         this.lessComesFirst = lessComesFirst;
     }
+	@Override
     public int compare(Schedule o1, Schedule o2)
     {
         if (o1.getFitness() == o2.getFitness())
