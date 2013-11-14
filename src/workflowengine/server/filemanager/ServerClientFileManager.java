@@ -34,7 +34,7 @@ public class ServerClientFileManager extends FileManager
 		{
 			thisSite.logger.log("Cannot start file server."+ex.getMessage(), ex);
 		}
-		Utils.bash("rm -rf "+thisSite.getWorkingDir()+"/*", false);
+		Utils.bash("rm -rf "+thisSite.getWorkingDir()+"/*");
 	}
 	
 	

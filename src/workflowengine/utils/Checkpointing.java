@@ -15,39 +15,39 @@ import static workflowengine.utils.Utils.bash;
 public class Checkpointing
 {
 	
-	public static void startCoordinator()
+	public static int startCoordinator(int port)
 	{
-		bash("dmtcp_coordinator --daemon "+Utils.getProp("DMTCP_port"), false);
-		command("k");
+		bash("dmtcp_coordinator --background "+port);
+		return command("k", port);
 	}
 	
-	public static void stopCoordinator()
+	public static int stopCoordinator(int port)
 	{
-		command("q");
+		return command("q", port);
 	}
 	
-	public static void command(String cmd)
+	public static int command(String cmd, int port)
 	{
-		bash("dmtcp_command --port "+Utils.getProp("DMTCP_port")+" "+cmd, false);
+		return bash("dmtcp_command --port "+port+" "+cmd);
 	}
 	
-	public static void checkpoint()
+	public static int checkpoint(int port)
 	{
-		command("bc");
+		return command("bc", port);
 	}
 	
-	public static String getExecCmdPrefix(String taskDir, String tid)
+	public static String getExecCmdPrefix(String taskDir, String tid, int port)
 	{
 		Utils.mkdirs(taskDir+"/"+tid+"_ckpt_data");
-		return "dmtcp_checkpoint;--quiet;--port;"+Utils.getProp("DMTCP_port")
+		return "dmtcp_checkpoint;--quiet;--port;"+port
 				+";--ckptdir;"+getCkptDir(taskDir,tid)+";";
 	}
 	
-	public static String getResumeCmd(String taskDir, String tid)
+	public static String getResumeCmd(String taskDir, String tid, int port)
 	{
 		String ckptDir = getCkptDir(taskDir,tid);
 		String dmtcpFile = Utils.getFileFromWildcard(ckptDir+"/ckpt*.dmtcp");
-		return "dmtcp_restart;--quiet;--port;"+Utils.getProp("DMTCP_port")
+		return "dmtcp_restart;--quiet;--port;"+port
 				+";"+dmtcpFile;
 	}
 	
@@ -64,11 +64,11 @@ public class Checkpointing
 		{
 			cmd += ' ' + new File(f).getName();
 		}
-		Utils.bash(cmd, false);
+		Utils.bash(cmd);
 	}
 	
 	public static void unpack(String ckptFileName, String taskDir)
 	{
-		Utils.bash("tar -xzf "+ckptFileName+" -C "+taskDir, false);
+		Utils.bash("tar -xzf "+ckptFileName+" -C "+taskDir);
 	}
 }

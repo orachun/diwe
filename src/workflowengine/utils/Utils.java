@@ -215,9 +215,20 @@ public class Utils
     }
 	
 	
-    public static String bash(String cmd, boolean getOutput)
+    public static int bash(String cmd)
     {
-        return execAndWait(new String[]{"bash", "-c", cmd}, getOutput);
+        try
+        {
+            Process p = Runtime.getRuntime().exec(new String[]{"bash", "-c", cmd});
+			BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            while (br.readLine() != null){}
+            p.waitFor();
+            return p.exitValue();
+        }
+        catch (IOException | InterruptedException ex)
+        {
+            return -1;
+        }
     }
 
     public static boolean exec(String[] cmds)

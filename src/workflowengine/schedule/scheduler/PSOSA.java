@@ -5,8 +5,17 @@
 package workflowengine.schedule.scheduler;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
+import workflowengine.utils.ModifiedFixedThreadPool;
 import workflowengine.utils.Utils;
 
 /**
@@ -42,10 +51,36 @@ public class PSOSA implements Scheduler
         population = new PSOIndividual[POP_SIZE];
     }
     
-    public Schedule getSchedule(SchedulingSettings ss)
+	@Override
+    public Schedule getSchedule(final SchedulingSettings ss)
     {
+		ModifiedFixedThreadPool threadPool = new ModifiedFixedThreadPool(3);
+        final SA SASchr = new SA();
+		
+		class StepRunnable implements Runnable
+		{
+			private int i;
+			public StepRunnable(int index)
+			{
+				i = index;
+			}
+			@Override
+			public void run()
+			{
+                population[i].calVelocity();
+                population[i].updatePosition();
+                population[i].updateFitness();
+                
+                
+                ss.setParam("init_schedule", population[i]);
+                Schedule s = SASchr.getSchedule(ss);
+                population[i].loadPosition(s);
+                population[i].updateFitness();
+			}
+		}
+		
+		
         init();
-        SA SASchr = new SA();
         for (int i = 0; i < POP_SIZE; i++)
         {
             population[i] = new PSOIndividual(ss, globalVars);
@@ -55,17 +90,19 @@ public class PSOSA implements Scheduler
         {
             for (int j = 0; j < POP_SIZE; j++)
             {
-                population[j].calVelocity();
-                population[j].updatePosition();
-                population[j].updateFitness();
-                
-                
-                ss.setParam("init_schedule", population[j]);
-                Schedule s = SASchr.getSchedule(ss);
-                population[j].loadPosition(s);
-                population[j].updateFitness();
+				threadPool.submit(new StepRunnable(j));
             }
+			try
+			{
+				threadPool.waitUntilAllTaskFinish();
+			}
+			catch (ExecutionException | InterruptedException ex)
+			{
+				Logger.getLogger(PSOSA.class.getName()).log(Level.SEVERE, null, ex);
+			}
         }
+		
+		
         return (Schedule)globalVars.get(VAR_GBEST);
     }
 

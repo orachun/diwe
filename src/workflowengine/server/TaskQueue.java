@@ -4,17 +4,22 @@
  */
 package workflowengine.server;
 
+import com.mongodb.BasicDBObject;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleEntry;
+import workflowengine.utils.db.Cacher;
+import workflowengine.utils.db.MongoDB;
 import workflowengine.workflow.Task;
+import workflowengine.workflow.TaskStatus;
 import workflowengine.workflow.Workflow;
 
 /**
@@ -33,13 +38,22 @@ public class TaskQueue implements Serializable
 		
 	public synchronized void submit(Schedule s)
 	{
-		taskQueue.addAll(s.getSettings().getWorkflow().getTaskQueueByPriority());
-		for (Map.Entry<String, String> entry : s.getMapping().entrySet())
+		
+		Queue<String> q = (s.getSettings().getWorkflow().getTaskQueueByPriority());
+		
+		for (String tid : q)
 		{
-			this.taskMap.put(entry.getKey(), new String[]
+			if(Task.get(tid).getStatus().status != TaskStatus.STATUS_COMPLETED &&
+					Task.get(tid).getStatus().status != TaskStatus.STATUS_EXECUTING)
+//			if(Task.get(tid).getStatus().status == TaskStatus.STATUS_WAITING || 
+//					Task.get(tid).getStatus().status == TaskStatus.STATUS_SUSPENDED)
 			{
-				s.getWorkflowID(), entry.getValue()
-			});
+				taskQueue.add(tid);
+				this.taskMap.put(tid, new String[]
+				{
+					s.getWorkflowID(), s.getWorkerForTask(tid)
+				});
+			}
 		}
 	}
 	
@@ -235,6 +249,11 @@ public class TaskQueue implements Serializable
 	
 	public void removeWorkflow(String superWfid)
 	{
+		removeWorkflow(superWfid, false);
+	}
+	
+	public synchronized void removeWorkflow(String superWfid, boolean clearCache)
+	{
 		Set<String> removeTasks = new HashSet<>();
 		for(Map.Entry<String, String[]> entry : taskMap.entrySet())
 		{
@@ -250,6 +269,16 @@ public class TaskQueue implements Serializable
 		{
 			taskMap.remove(tid);
 			taskQueue.remove(tid);
+			MongoDB.SCHEDULE.remove(new BasicDBObject("tid", tid));
+			System.out.println("Remove "+Task.get(tid).getName());
+		}
+		
+		if(clearCache)
+		{
+			for(String tid : removeTasks)
+			{
+				Cacher.remove(tid);
+			}
 		}
 	}
 }

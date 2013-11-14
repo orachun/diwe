@@ -52,12 +52,14 @@ public class Worker extends WorkflowExecutor
 		for (int i = 0; i < totalProcessors; i++)
 		{
 			execNetwork.add(Integer.toString(i), Double.POSITIVE_INFINITY);
-			processors[i] = new ExecutingProcessor(this);
+			processors[i] = new ExecutingProcessor(i, this);
 		}
 
 		execThreadPool = Executors.newFixedThreadPool(totalProcessors);
 		setTaskStatusThreadPool = Executors.newFixedThreadPool(totalProcessors);
 		manager.registerWorker(uri, totalProcessors);
+		
+		Utils.setPropIfNotExist("percent_delay", "0.00");
 	}
 
 	public static WorkflowExecutor start()
@@ -139,9 +141,9 @@ public class Worker extends WorkflowExecutor
 		{
 			return;
 		}
+		dispatchingThreads++;
 		synchronized(this)
 		{
-			dispatchingThreads++;
 			while (workingProcessors < totalProcessors && !taskQueue.isEmpty())
 			{
 				final ScheduleEntry se = taskQueue.poll();
@@ -153,19 +155,31 @@ public class Worker extends WorkflowExecutor
 						public void run()
 						{
 							Task t = Task.get(se.taskUUID);
-							for(String fid : t.getInputFiles())
+							System.out.println("Dispatching "+t.getName());
+							if(t.getStatus().status != TaskStatus.STATUS_COMPLETED && 
+									t.getStatus().status != TaskStatus.STATUS_EXECUTING)
 							{
-								waitForFile(fid, se.superWfid);
+								for(String fid : t.getInputFiles())
+								{
+									waitForFile(fid, se.superWfid);
+								}
+								logTaskStatus(TaskStatus.dispatchedStatus(t.getUUID()));
+								ExecutingProcessor p = processors[Integer.parseInt(se.target)];
+								p.waitUntilIdle();
+								p.exec(Task.get(se.taskUUID), se);
 							}
-							logTaskStatus(TaskStatus.dispatchedStatus(t.getUUID()));
-							processors[Integer.parseInt(se.target)].exec(Task.get(se.taskUUID), se);
+							
+							synchronized(Worker.this)
+							{
+								workingProcessors--;
+							}
 						}
 					});
 					workingProcessors++;
 				}
 				else
 				{
-					System.out.println("No ready tasks");
+//					System.out.println("No ready tasks");
 					break;
 				}
 			}
@@ -184,33 +198,32 @@ public class Worker extends WorkflowExecutor
 			public void run()
 			{
 				boolean taskCompleted = status.status == TaskStatus.STATUS_COMPLETED;
-				Task.get(status.taskID).setStatus(status);
 				
 				
 				if (taskCompleted)
 				{
-					workingProcessors--;
 					runningTasks.remove(status.taskID);
 				}
-				else if(status.status == TaskStatus.STATUS_EXECUTING)
+				else if (status.status == TaskStatus.STATUS_EXECUTING)
 				{
 					runningTasks.put(status.taskID, status.schEntry.target);
 				}
-				else if(status.status == TaskStatus.STATUS_SUSPENDED)
+				else if (status.status == TaskStatus.STATUS_SUSPENDED)
 				{
-					workingProcessors--;
 					runningTasks.remove(status.taskID);
 				}
 				
 				status.schEntry.target = Worker.this.uri;
 				
-				if (taskCompleted && !taskQueue.isEmpty())
+				if (taskCompleted)
 				{
 					dispatchTask();
 				}
 			}
 		});
 		
+		Task t = Task.get(status.taskID);
+		t.setStatus(status);
 		
 		if (status.status == TaskStatus.STATUS_COMPLETED)
 		{
@@ -225,6 +238,9 @@ public class Worker extends WorkflowExecutor
 		
 		logTaskStatus(status);
 		manager.setTaskStatus(status);
+		
+		
+		System.out.println("Task "+t.getName()+" is "+status.status);
 	}
 
 	@Override
@@ -321,4 +337,16 @@ public class Worker extends WorkflowExecutor
 		return (COST_PER_SECOND * getUsage()) + 
 				(COST_PER_BYTE * getTransferredBytes());
 	}
+
+	@Override
+	public void shutdown()
+	{
+		for(ExecutingProcessor p : processors)
+		{
+			p.shutdown();
+		}
+		super.shutdown();
+	}
+	
+	
 }

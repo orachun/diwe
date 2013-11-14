@@ -4,7 +4,6 @@
  */
 package workflowengine.schedule;
 
-import java.util.Collection;
 import java.util.Collections;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
@@ -31,7 +30,7 @@ public class SchedulingSettings
     private HashMap<String, Object> params = new HashMap<>();
     private FC fc;
 	private ExecutorNetwork execNetwork;
-	private Map<String, Site> siteMap = new HashMap<>();
+//	private Map<String, Site> siteMap = new HashMap<>();
 	
     public SchedulingSettings(WorkflowExecutor we, Workflow wf, ExecutorNetwork execNetwork)
 	{
@@ -71,11 +70,11 @@ public class SchedulingSettings
         }
         taskSet = this.wf.getTaskSet();
 		
-		for(String uri : we.getWorkerSet())
-		{
-			siteMap.put(uri, new Site(uri, we.getWorker(uri).getTotalProcessors()));
-		}
-		siteMap = Collections.unmodifiableMap(siteMap);
+//		for(String uri : we.getWorkerSet())
+//		{
+//			siteMap.put(uri, new Site(uri, we.getWorker(uri).getTotalProcessors()));
+//		}
+//		siteMap = Collections.unmodifiableMap(siteMap);
 		
 	}
     public FC getFc()
@@ -155,15 +154,20 @@ public class SchedulingSettings
 	}
     
 	
-	public Collection<Site> getSites()
+	public Map<String, Site> getSiteMap()
 	{
-		return siteMap.values();
+		HashMap<String, Site> map = new HashMap<>();
+		for(String uri : we.getWorkerSet())
+		{
+			map.put(uri, new Site(uri, we.getWorker(uri).getTotalProcessors()));
+		}
+		return map;
 	}
 	
-	public Site getSite(String uri)
-	{
-		return siteMap.get(uri);
-	}
+//	public Site getSite(String uri)
+//	{
+//		return siteMap.get(uri);
+//	}
 	
 	public String[] getTaskArray()
 	{

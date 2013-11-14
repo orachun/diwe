@@ -5,6 +5,7 @@
 package workflowengine.schedule.fc;
 
 import workflowengine.schedule.Schedule;
+import workflowengine.utils.Utils;
 
 
 /**
@@ -23,12 +24,24 @@ public class CostOptimizationFC implements FC
 
     public CostOptimizationFC()
     {
+		if(Utils.hasProp(PROP_DEADLINE))
+		{
+			DEADLINE = Utils.getDoubleProp(PROP_DEADLINE);
+		}
+		if(Utils.hasProp(PROP_CONSTANT_PENALTY))
+		{
+			CONSTANT_PENALTY = Utils.getDoubleProp(PROP_CONSTANT_PENALTY);
+		}
+		if(Utils.hasProp(PROP_WEIGHTED_PENALTY))
+		{
+			WEIGHT = Utils.getDoubleProp(PROP_WEIGHTED_PENALTY);
+		}
     }
 
-    public CostOptimizationFC(double deadline, double constant, double weight)
+    public CostOptimizationFC(double percentDeadline, double constant, double weight)
     {
         this.CONSTANT_PENALTY = constant;
-        this.DEADLINE = deadline;
+        this.DEADLINE = percentDeadline;
         this.WEIGHT = weight;
     }
     
@@ -38,7 +51,7 @@ public class CostOptimizationFC implements FC
         double fitness;
         if (sch.getMakespan() > DEADLINE)
         {
-            double PenaltyFunction = CONSTANT_PENALTY + WEIGHT * (sch.getMakespan() - DEADLINE);
+            double PenaltyFunction = CONSTANT_PENALTY + WEIGHT * (sch.getMakespan() - DEADLINE*sch.getSettings().getWorkflow().getCumulatedExecTime());
             fitness = sch.getCost() + PenaltyFunction;
         }
         else

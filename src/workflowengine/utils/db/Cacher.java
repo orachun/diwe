@@ -93,7 +93,7 @@ public class Cacher
 		}
 	}
 	
-	public Set<?> getAllInstances(Class<?> c)
+	public static Set<?> getAllInstances(Class<?> c)
 	{
 		Set s = new HashSet<>();
 		for(Savable obj : cache.values())
@@ -105,5 +105,16 @@ public class Cacher
 			catch(ClassCastException e){}
 		}
 		return s;
+	}
+	
+	public static void clear()
+	{
+		cache.clear();
+		keyQ.clear();
+	}
+	public static void remove(Object key)
+	{
+		cache.remove(key);
+		keyQ.remove(key);
 	}
 }

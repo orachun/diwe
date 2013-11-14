@@ -9,16 +9,23 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.Random;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import workflowengine.utils.UniqueMap;
 import workflowengine.utils.db.DBException;
 import workflowengine.utils.Utils;
 import workflowengine.utils.db.Cacher;
@@ -79,7 +86,7 @@ public class Workflow implements Serializable, Savable
 				String outfile = Utils.getProp("working_dir") + "/" + f.getName(wfid);
 				File file = new File(outfile);
 				file.getParentFile().mkdirs();
-				Utils.bash("truncate --size " + (int) (Math.round(f.getSize())) + " " + outfile, false);
+				Utils.bash("truncate --size " + (int) (Math.round(f.getSize())) + " " + outfile);
 			}
 		}
 	}
@@ -537,18 +544,14 @@ public class Workflow implements Serializable, Savable
 		return taskGraph.getNodeSet().contains(tid);
 	}
 
-	public static void main(String[] args) throws DBException, FileNotFoundException
-	{
-		Workflow wf = WorkflowFactory.fromDummyDAX("/drive-d/Dropbox/Work (1)/Workflow Thesis/ExampleDAGs/Inspiral_30.xml", "Inspiral_30");
-		Cacher.flushAll();
-	}
 	
 	public Workflow getSubWorkflowOfRemainTasks()
 	{
 		Set<String> remainTasks = new HashSet<>();
 		for(String tid : getTaskSet())
 		{
-			if(Task.get(tid).getStatus().status != STATUS_COMPLETED)
+			if(Task.get(tid).getStatus().status != TaskStatus.STATUS_COMPLETED)
+//			if(Task.get(tid).getStatus().status == TaskStatus.STATUS_WAITING)
 			{
 				remainTasks.add(tid);
 			}
@@ -565,6 +568,116 @@ public class Workflow implements Serializable, Savable
 				.append("completed", Utils.formatDateTime(getFinishedTime()))
 				.append("makespan", getFinishedTime()-getScheduledTime())
 				.append("cost", totalCost)
+				.append("dynamic", Utils.getProp("dynamic"))
+				.append("deadline", Utils.getProp("fc_deadline"))
+				.append("scheduler", Utils.getProp("scheduler"))
+				
 				);
+	}
+	
+	public void saveToDaxFile(String filepath)
+	{
+		try
+		{
+			UniqueMap<Integer, String> tids = UniqueMap.fromArray(getTaskSet().toArray(new String[0]));
+			PrintWriter pw = new PrintWriter(filepath);
+			pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+			pw.println("<adag>");
+			for(String tid : getTaskSet())
+			{
+				Task t = Task.get(tid);
+				pw.printf("<job id=\"ID%05d\" name=\"%s\" runtime=\"%f\"> \n", tids.getKey(tid), t.getName(), t.getEstimatedExecTime());
+				for(String fid : t.getInputFiles())
+				{
+					WorkflowFile f = WorkflowFile.get(fid);
+					pw.printf("\t<uses file=\"%s\" link=\"input\" size=\"%d\"/>\n", f.getName(), f.getSize());
+				}
+				for(String fid : t.getOutputFiles())
+				{
+					WorkflowFile f = WorkflowFile.get(fid);
+					pw.printf("\t<uses file=\"%s\" link=\"input\" size=\"%d\"/>\n", f.getName(), f.getSize());
+				}
+				pw.printf("</job>\n");
+			}
+			
+			for(String tid : getTaskSet())
+			{
+				Set<String> parents = getParent(tid);
+				if(!parents.isEmpty())
+				{
+					pw.printf("<child ref=\"ID%05d\">\n", tids.getKey(tid));
+					for(String ptid : parents)
+					{
+						pw.printf("\t<parent ref=\"ID%05d\" />\n", tids.getKey(ptid));
+					}
+					pw.printf("</child>\n");
+				}
+			}
+			
+			pw.println("</adag>");
+			pw.close();
+		}
+		catch (FileNotFoundException ex)
+		{
+			Logger.getLogger(Workflow.class.getName()).log(Level.SEVERE, null, ex);
+		}
+		
+	}
+	
+	
+	public static void randomBalancedWorkflow(String daxFilePaht, String name, int tasks, int levels, int averageRuntime)
+	{
+		Random r = new Random();
+		Workflow wf = new Workflow(name, Utils.uuid());
+		int tasksPerLevel = (int)Math.round(tasks/(double)levels);
+		String rootTid = Utils.uuid();
+		int runtime = (int)Math.round((r.nextGaussian()*0.2*averageRuntime)+averageRuntime);
+		Task t = new Task(wf.uuid, "ROOT", "dummy;"+runtime, runtime, rootTid, 
+				TaskStatus.waitingStatus(rootTid));
+		wf.taskGraph.addNode(rootTid);
+		for(int i=0;i<tasksPerLevel;i++)
+		{
+			String parent = rootTid;
+			for(int j=0;j<levels;j++)
+			{
+				String tid = Utils.uuid();
+				runtime = (int)Math.round((r.nextGaussian()*averageRuntime)+averageRuntime);
+				t = new Task(wf.uuid, "T"+i+"-"+j, "dummy;"+runtime, runtime, tid,
+						TaskStatus.waitingStatus(tid));
+				wf.taskGraph.addNodes(parent, tid);
+				parent = tid;
+			}
+		}
+		wf.saveToDaxFile(daxFilePaht);
+	}
+	
+	public static void randomUnbalancedWorkflow(String daxFilePaht, String name, int tasks, int averageRuntime)
+	{
+		List<String> tids = new ArrayList<>(tasks);
+		Random r = new Random();
+		Workflow wf = new Workflow(name, Utils.uuid());
+		String rootTid = Utils.uuid();
+		int runtime = (int)Math.round((r.nextGaussian()*averageRuntime)+averageRuntime);
+		Task t = new Task(wf.uuid, "ROOT", "dummy;"+runtime, runtime, rootTid, 
+				TaskStatus.waitingStatus(rootTid));
+		tids.add(rootTid);
+		wf.taskGraph.addNode(rootTid);
+		for(int i=0;i<tasks-1;i++)
+		{
+			String parent = tids.get(r.nextInt(tids.size()));
+			String tid = Utils.uuid();
+			runtime = (int)Math.round((r.nextGaussian()*0.2*averageRuntime)+averageRuntime);
+			t = new Task(wf.uuid, "T"+i, "dummy;"+runtime, runtime, tid,
+					TaskStatus.waitingStatus(tid));
+			wf.taskGraph.addNodes(parent, tid);
+			tids.add(tid);			
+		}
+		wf.saveToDaxFile(daxFilePaht);
+	}
+	
+	
+	public static void main(String[] args) throws DBException, FileNotFoundException
+	{
+		randomBalancedWorkflow(args[0], args[1], Integer.parseInt(args[2]), Integer.parseInt(args[3]), Integer.parseInt(args[4]));
 	}
 }

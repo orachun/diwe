@@ -22,7 +22,6 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
-import workflowengine.schedule.scheduler.CircularScheduler;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Checkpointing;
@@ -44,8 +43,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 	public static final char FROM_WORKER = 'W';
 	public static final char FROM_MANAGER = 'M';
 	public static final char FROM_SELF = 'S';
-	public static final double COST_PER_SECOND = 0.001;
-	public static final double COST_PER_BYTE = 0.00000001;
+	public static final double COST_PER_SECOND = 0.000022222;
+	public static final double COST_PER_BYTE =   0.000000000005;
 	
 	protected static WorkflowExecutor instant;
 	protected WorkflowExecutorInterface manager;
@@ -79,7 +78,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 //			}
 //		}.start();
 		
-		Checkpointing.startCoordinator();
+//		Checkpointing.startCoordinator();
 		
 		eventLogger = new EventLogger();
 		eventLogger.start("EXEC_INIT", "Initializing executor");
@@ -138,6 +137,23 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		eventLogger.finish("EXEC_INIT");
 		
 		
+		
+		new Thread()
+		{
+			@Override
+			public void run()
+			{
+				while(true)
+				{
+					try{
+						Thread.sleep(1000);
+					}
+					catch(Exception e)
+					{}
+					dispatchTask();
+				}
+			}			
+		}.start();
 	}
 	
 	public static WorkflowExecutor get()
@@ -394,7 +410,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 					}
 				}
 //				Cacher.saveAll();
-				Checkpointing.stopCoordinator();
+//				Checkpointing.stopCoordinator();
 				System.out.println("Done.");
 				System.exit(0);
 			}

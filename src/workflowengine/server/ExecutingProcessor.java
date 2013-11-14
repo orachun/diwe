@@ -6,6 +6,7 @@ package workflowengine.server;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.Random;
 import java.util.Set;
 import workflowengine.schedule.ScheduleEntry;
 import workflowengine.utils.Checkpointing;
@@ -20,18 +21,39 @@ import workflowengine.workflow.WorkflowFile;
  */
 public class ExecutingProcessor
 {
-	private Worker manager;
+	private final Worker manager;
 	private Process currentProcess;
 	private Task currentTask;
 	private ScheduleEntry currentSE;
 	private long firstSubmitTime = -1;
 	private long usage = 0;
 	private final Object SUSPEND_LOCK = new Object();
+	private final Object IDLE_WAITING_LOCK = new Object();
 	private boolean isSuspended = false;
-	public ExecutingProcessor(Worker manager) 
+	private Random r = new Random();
+	private final int dmtcpPort;
+	private TaskStatus ts = null;
+	public ExecutingProcessor(int no, Worker manager) 
 	{
 		super();
+		dmtcpPort = Utils.getIntProp("DMTCP_port")+no;
 		this.manager = manager;
+	}
+	
+	public void waitUntilIdle()
+	{
+		while(currentProcess != null)
+		{
+			synchronized(IDLE_WAITING_LOCK)
+			{
+				try
+				{
+					IDLE_WAITING_LOCK.wait(5000);
+				}
+				catch (InterruptedException ex)
+				{}
+			}
+		}
 	}
 	
 	public synchronized TaskStatus exec(Task t, ScheduleEntry se)
@@ -48,11 +70,15 @@ public class ExecutingProcessor
 //		long start = Utils.time();
 		this.currentTask = t;
 		this.currentSE = se;
-		TaskStatus ts = TaskStatus.executingStatus(se);
+		ts = TaskStatus.executingStatus(se);
 		int tries = 0;
 		String[] cmds = prepareCmd(t, se);
-		while (ts.status != TaskStatus.STATUS_COMPLETED && tries < 5)
+		
+		Checkpointing.startCoordinator(dmtcpPort);
+		
+		while (tries < 5)
 		{
+			ts = TaskStatus.executingStatus(se);
 			try
 			{
 				synchronized (SUSPEND_LOCK)
@@ -93,6 +119,11 @@ public class ExecutingProcessor
 						{
 							ts = ts.complete();
 							manager.logger.log("Task "+t.getName()+ " is completed.");
+							long delay = Math.random() > 0.3 ? 0 : (long)Math.abs(
+									Math.round(Utils.getDoubleProp("percent_delay")
+									*r.nextGaussian()*t.getEstimatedExecTime()));
+							Thread.sleep(delay);
+							break;
 						}
 						else
 						{
@@ -114,13 +145,21 @@ public class ExecutingProcessor
 			tries++;
 		}
 		
-		manager.setTaskStatus(ts);
+		if(ts.status != TaskStatus.STATUS_SUSPENDED)
+		{
+			manager.setTaskStatus(ts);
+		}
 		
-//		usage += (Utils.time() - start);
 		usage = Utils.time() - firstSubmitTime;
 		currentProcess = null;
 		currentTask = null;
 		currentSE = null;
+		ts = null;
+		Checkpointing.stopCoordinator(dmtcpPort);
+		synchronized(IDLE_WAITING_LOCK)
+		{
+			notify();
+		}
 		return ts;
 	}
 
@@ -135,15 +174,16 @@ public class ExecutingProcessor
 		String[] cmds;
 		if(t.getStatus().status == TaskStatus.STATUS_SUSPENDED)
 		{
+			System.out.println("Restarting "+t.getName());
 			WorkflowFile ckptFile = WorkflowFile.get(t.getCkptFid());
 			String ckptFileName = taskDir+'/'+ckptFile.getName();
 			Checkpointing.unpack(ckptFileName, taskDir);
-			cmds = Checkpointing.getResumeCmd(taskDir, t.getUUID()).split(";");
+			cmds = Checkpointing.getResumeCmd(taskDir, t.getUUID(), dmtcpPort).split(";");
 		}
 		else
 		{
 		String prefix;
-			prefix = Checkpointing.getExecCmdPrefix(taskDir, t.getUUID());
+			prefix = Checkpointing.getExecCmdPrefix(taskDir, t.getUUID(), dmtcpPort);
 			cmds = (prefix	+taskDir + "/" + t.getCmd()).split(";");
 		}
 		
@@ -202,35 +242,55 @@ public class ExecutingProcessor
 	{
 		if(currentProcess != null)
 		{
-			synchronized(SUSPEND_LOCK)
+			synchronized(this.manager)
 			{
-				if(isSuspended || Utils.isProcTerminated(currentProcess))
+				synchronized(SUSPEND_LOCK)
 				{
-					return null;
-				}
-				isSuspended = true;
-				System.out.println("Suspending current task...");
-				Checkpointing.checkpoint();
-				currentProcess.destroy();
-				
-				String tid = currentTask.getUUID();
-				String taskDir = manager.getWorkingDir() + '/' + this.currentSE.superWfid;
-				String ckptDir = Checkpointing.getCkptDir(taskDir, tid);
-				String ckptFileName = taskDir + '/' + tid + "_ckpt.tar";
-				Checkpointing.pack(ckptFileName, ckptDir, getRelatedOutputFiles(currentTask));
+					if(isSuspended || Utils.isProcTerminated(currentProcess))
+					{
+						return null;
+					}
+					
+					//Not suspend if the task almost finishes
+					if((Utils.time()-ts.start)/currentTask.getEstimatedExecTime() > 0.8)
+					{
+						return null;
+					}
+					System.out.println("Suspending current task...");
+					if(Checkpointing.checkpoint(dmtcpPort) != 0)
+					{
+						return null;
+					}
+					isSuspended = true;
+					currentProcess.destroy();
 
-				WorkflowFile ckptFile = new WorkflowFile(tid + "_ckpt.tar", 
-						Utils.getFileLength(ckptFileName), 
-						WorkflowFile.TYPE_CHECKPOINT_FILE, 
-						Utils.uuid()
-						);
-				
-				System.out.println("Done.");
-				return new SuspendedTaskInfo(tid, ckptFile);
+					String tid = currentTask.getUUID();
+					String taskDir = manager.getWorkingDir() + '/' + this.currentSE.superWfid;
+					String ckptDir = Checkpointing.getCkptDir(taskDir, tid);
+					String ckptFileName = taskDir + '/' + tid + "_ckpt.tar";
+					Checkpointing.pack(ckptFileName, ckptDir, getRelatedOutputFiles(currentTask));
+
+					WorkflowFile ckptFile = new WorkflowFile(tid + "_ckpt.tar", 
+							Utils.getFileLength(ckptFileName), 
+							WorkflowFile.TYPE_CHECKPOINT_FILE, 
+							Utils.uuid()
+							);
+
+					System.out.println("Done.");
+					ts = ts.suspend();
+//					currentTask.setStatus(ts);
+					manager.setTaskStatus(ts);
+					return new SuspendedTaskInfo(tid, ckptFile);
+				}
 			}
 		}
 		
 		return null;
 	}
 	
+	
+	public void shutdown()
+	{
+		Checkpointing.stopCoordinator(dmtcpPort);
+	}
 }

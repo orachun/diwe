@@ -1,5 +1,6 @@
 package workflowengine.schedule;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -139,6 +140,7 @@ public class Schedule
     private void calMakespan()
     {
         LinkedList<String> finishedTasks = new LinkedList<>();
+		Map<String, Site> siteMap = settings.getSiteMap();
         estimatedStart.clear();
         estimatedFinish.clear();
 
@@ -173,15 +175,14 @@ public class Schedule
 
             String worker = this.getWorkerForTask(tid);
 			Set<String> fileSet = existingFiles.get(worker);
-			Site site = settings.getSite(worker);
-			double serverReadyTime = site.getAvailableTime(makespan);
+			Site site = siteMap.get(worker);
             double parentFinishTime = 0;
             for (String parentTid : settings.getWorkflow().getParent(tid))
             {
                 parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(parentTid));
             }
 			
-            double taskStartTime = Math.max(parentFinishTime, serverReadyTime);
+            double taskStartTime = site.getAvailableTime(parentFinishTime);
 			
 			Task t = Task.get(tid);
 			

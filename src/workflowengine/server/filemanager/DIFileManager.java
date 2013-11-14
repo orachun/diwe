@@ -134,8 +134,8 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 
 		initDifsys();
 
-		Utils.bash("rm -rf " + Utils.getProp("working_dir") + "/*", false);
-		Utils.bash("rm -rf " + Utils.getProp("fs_storage_dir") + "/*", false);
+		Utils.bash("rm -rf " + Utils.getProp("working_dir") + "/*");
+		Utils.bash("rm -rf " + Utils.getProp("fs_storage_dir") + "/*");
 		startListeningThread();
 		startUploadThread();
 	}

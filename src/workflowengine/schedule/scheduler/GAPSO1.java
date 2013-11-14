@@ -5,6 +5,10 @@
 package workflowengine.schedule.scheduler;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.Utils;
@@ -18,8 +22,8 @@ public class GAPSO1 implements Scheduler
     public static final String PROP_ITERATIONS = "gapso_iterations";
     protected static double ITERATION;
     
-    GA ga = new GA();
-    PSO pso = new PSO();
+    private final GA ga = new GA();
+    private final PSO pso = new PSO();
     public void init()
     {
         ITERATION = Utils.getIntProp(PROP_ITERATIONS);
@@ -27,7 +31,8 @@ public class GAPSO1 implements Scheduler
     
     @Override
     public Schedule getSchedule(SchedulingSettings settings)
-    {
+    {	
+		
         ITERATION = Utils.getIntProp(PROP_ITERATIONS);
         ga.init(settings);
         pso.init(settings);
@@ -40,14 +45,40 @@ public class GAPSO1 implements Scheduler
         psopop.get(psopop.size()-1).loadPosition(heftSchedule);
         
         
+		Runnable gaStepRunnable = new Runnable(){
+
+			@Override
+			public void run()
+			{
+				ga.step();
+			}
+		};
+		Runnable psoStepRunnable = new Runnable(){
+
+			@Override
+			public void run()
+			{
+				pso.step();
+				pso.sort();
+			}
+		};
+		ExecutorService threadPool = Executors.newFixedThreadPool(2);
         
         ga.getPop().set(0, new GAIndividual(heftSchedule));
         
         for(int i=0;i<ITERATION;i++)
         {
-            ga.step();
-            pso.step();
-            pso.sort();
+			Future gaStepTask = threadPool.submit(gaStepRunnable);
+			Future psoStepTask = threadPool.submit(psoStepRunnable);
+			try
+			{
+				gaStepTask.get();
+				psoStepTask.get();
+			}
+			catch(ExecutionException | InterruptedException e )
+			{
+				throw new RuntimeException(e);
+			}
             
             gapop = ga.getPop();
             psopop = pso.getPop();
@@ -59,6 +90,8 @@ public class GAPSO1 implements Scheduler
             }
             
         }
+		
+		threadPool.shutdown();
         
         Schedule spso = pso.getBestSchedule();
         Schedule sga = ga.getBestSchedule();

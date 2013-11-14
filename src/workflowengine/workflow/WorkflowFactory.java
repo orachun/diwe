@@ -173,6 +173,8 @@ public class WorkflowFactory
 
 	public static Workflow fromDummyDAX(String filename, String name)
 	{
+			
+		
 		HashMap<String, WorkflowFile> files = new HashMap<>();
 		Workflow wf = new Workflow(name, Utils.uuid());
 		WorkflowFile dummyFile = new WorkflowFile("dummy", 0.0088, WorkflowFile.TYPE_EXEC, Utils.uuid());
@@ -195,8 +197,9 @@ public class WorkflowFactory
 //                    double runtime = Double.parseDouble(jobElement.getAttribute("runtime"));//   
 
 					String taskName = id + jobElement.getAttribute("name");
-//                    int runtime = (int)Math.ceil(Double.parseDouble(jobElement.getAttribute("runtime")));
-					int runtime = 3;
+                    int runtime = (int)Math.ceil(Double.parseDouble(jobElement.getAttribute("runtime")));
+//					double runtime = getTaskExecTime(name, taskName);
+
 					String tid = Utils.uuid();
 					Task task = new Task(wf.getUUID(), taskName, "", runtime, tid, TaskStatus.waitingStatus(tid));
 
@@ -282,22 +285,31 @@ public class WorkflowFactory
 	private static double getTaskExecTime(String workflowName, String taskName)
 	{
 		Iterator<DBObject> res = MongoDB.EXEC_TIME.aggregate(
-				new BasicDBObject("$group", 
-					new BasicDBObject("_id", "$task_name")
-						.append("exec_time", 
-							new BasicDBObject("$avg", "$exec_time")
-						)
-					),
 				new BasicDBObject("$match", 
 					new BasicDBObject("task_name", taskName)
 						.append("workflow_name", workflowName)
+						.append("exec_time", new BasicDBObject("$lt", 30000))
+				),
+				new BasicDBObject("$group", 
+					new BasicDBObject("_id", 
+							new BasicDBObject("task_name", "$task_name")
 					)
-				).results().iterator();
+					.append("exec_time", 
+						new BasicDBObject("$avg", "$exec_time")
+					)
+				)
+			).results().iterator();
 
 		if(res.hasNext())
 		{
-			return (double)res.next().get("exec_time");
+			DBObject o = res.next();
+//			System.out.println(taskName+":"+o.get("exec_time"));
+			return (double)o.get("exec_time");
 		}
+		
+		
 		return AVG_WORKLOAD;
 	}
+	
+	
 }

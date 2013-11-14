@@ -8,11 +8,20 @@ import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
-import workflowengine.utils.Utils;
+import java.util.Queue;
+import java.util.Set;
+import workflowengine.resource.ExecutorNetwork;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.utils.db.Cacher;
 import workflowengine.utils.db.MongoDB;
 import workflowengine.utils.db.Savable;
+import workflowengine.workflow.Task;
+import workflowengine.workflow.TaskStatus;
+import workflowengine.workflow.Workflow;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -94,6 +103,122 @@ public class ScheduleTable implements Savable
 	}
 	
 		
+	public double getCurrentCost(double currentCost, double currentMakespan, Workflow wf, Map<String, Site> siteMap, ExecutorNetwork execNetwork)
+    {
+        LinkedList<String> finishedTasks = new LinkedList<>();
+        estimatedStart.clear();
+        estimatedFinish.clear();
+		
+
+//        for (String tid : settings.getFixedTasks())
+//        {
+//            estimatedStart.put(tid, 0.0);
+//            estimatedFinish.put(tid, 0.0);
+//        }
+//        finishedTasks.addAll(settings.getFixedTasks());
+		
+		
+		
+		HashMap<String, Set<String>> existingFiles = new HashMap<>();
+		for(String worker : siteMap.keySet())
+		{
+			existingFiles.put(worker, new HashSet<String>());
+		}
+		
+        double makespan = currentMakespan;
+		double cost = currentCost;
+        Queue<String> pendingTasks = wf.getTaskQueueByOrder();
+        while (!pendingTasks.isEmpty())
+        {
+            String tid = pendingTasks.poll();
+			Task t = Task.get(tid);
+			if (t.getStatus().status == TaskStatus.STATUS_COMPLETED)
+			{
+				estimatedStart.put(tid, 0.0);
+				estimatedFinish.put(tid, 0.0);
+				finishedTasks.add(tid);
+				continue;
+			}
+            if (finishedTasks.contains(tid))
+            {
+                continue;
+            }
+            if (!finishedTasks.containsAll(wf.getParent(tid)))
+            {
+                pendingTasks.add(tid);
+                continue;
+            }
+
+            String worker = this.mapping.get(tid);
+			Set<String> fileSet = existingFiles.get(worker);
+			Site site = siteMap.get(worker);
+            double parentFinishTime = 0;
+            for (String parentTid : wf.getParent(tid))
+            {
+                parentFinishTime = Math.max(parentFinishTime, estimatedFinish.get(parentTid));
+            }
+			
+            double taskStartTime = site.getAvailableTime(parentFinishTime);
+			
+			
+			//Add input file stage-in time
+			for(String fid : t.getInputFiles())
+			{
+				if(!fileSet.contains(fid))
+				{
+					double fileSize = WorkflowFile.get(fid).getSize();
+					taskStartTime += execNetwork.getTransferTime(
+						worker, 
+						fileSize
+						);
+					fileSet.add(fid);
+					
+					//Add input file stage-in cost
+					cost += (WorkflowExecutor.COST_PER_BYTE * fileSize);
+				}
+			}
+						
+//			cost += WorkflowExecutor.COST_PER_SECOND * t.getEstimatedExecTime();
+			
+            double taskFinishTime = taskStartTime + t.getEstimatedExecTime();
+			
+			//Add output file stage-out time
+			Set<String> outputFiles = t.getOutputFiles();
+			taskFinishTime += execNetwork.getTransferTime(worker, outputFiles);
+			fileSet.addAll(outputFiles);
+			
+			//Add output file stage-out cost
+			for(String fid : outputFiles)
+			{
+				cost += (WorkflowExecutor.COST_PER_BYTE * WorkflowFile.get(fid).getSize());
+			}
+			
+			site.scheduleJob(taskStartTime, taskFinishTime);
+			
+            estimatedStart.put(tid, taskStartTime);
+            estimatedFinish.put(tid, taskFinishTime);
+            makespan = Math.max(makespan, taskFinishTime);
+            finishedTasks.add(tid);
+        }
+		
+//		System.out.println("Est Tx cost: "+cost);
+//		System.out.println("Ext exec cost: "+(WorkflowExecutor.COST_PER_SECOND * makespan * settings.getTotalWorkers()));
+		cost += (WorkflowExecutor.COST_PER_SECOND * makespan * siteMap.keySet().size());
+		return cost;
+    }
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	public static ScheduleTable get(String uuid)
 	{
