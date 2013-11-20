@@ -16,6 +16,7 @@ import java.util.logging.Logger;
 import workflowengine.schedule.Schedule;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.utils.ModifiedFixedThreadPool;
+import workflowengine.utils.UniqueMap;
 import workflowengine.utils.Utils;
 
 /**
@@ -34,10 +35,16 @@ public class PSOSA implements Scheduler
     private static double ITERATIONS;
     private static int POP_SIZE;
     private PSOIndividual[] population;
-    private HashMap<String, Object> globalVars;
+    private final HashMap<String, Object> globalVars = new HashMap<>();
 
-    public void init()
+    public void init(SchedulingSettings ss)
     {
+		String[] workers = ss.getSiteArray();
+		ss.setParam("workers", workers);
+		ss.setParam("tasks", ss.getTaskArray());
+		ss.setParam("workerMap", UniqueMap.fromArray(workers));
+		
+		
         Utils.setPropIfNotExist(PROP_ITERATIONS, "100");
         Utils.setPropIfNotExist(PROP_POP_SIZE, "20");
         Utils.setPropIfNotExist(PROP_PBEST_WEIGHT, "0.4");
@@ -46,7 +53,6 @@ public class PSOSA implements Scheduler
         
         ITERATIONS = Utils.getIntProp(PROP_ITERATIONS);
         POP_SIZE = Utils.getIntProp(PROP_POP_SIZE);
-        globalVars = new HashMap<>();
         globalVars.put(PSOSA.VAR_GBEST, null);
         population = new PSOIndividual[POP_SIZE];
     }
@@ -71,16 +77,14 @@ public class PSOSA implements Scheduler
                 population[i].updatePosition();
                 population[i].updateFitness();
                 
-                
-                ss.setParam("init_schedule", population[i]);
-                Schedule s = SASchr.getSchedule(ss);
+                Schedule s = SASchr.getSchedule(ss, population[i]);
                 population[i].loadPosition(s);
                 population[i].updateFitness();
 			}
 		}
 		
 		
-        init();
+        init(ss);
         for (int i = 0; i < POP_SIZE; i++)
         {
             population[i] = new PSOIndividual(ss, globalVars);
@@ -92,16 +96,9 @@ public class PSOSA implements Scheduler
             {
 				threadPool.submit(new StepRunnable(j));
             }
-			try
-			{
-				threadPool.waitUntilAllTaskFinish();
-			}
-			catch (ExecutionException | InterruptedException ex)
-			{
-				Logger.getLogger(PSOSA.class.getName()).log(Level.SEVERE, null, ex);
-			}
+			threadPool.waitUntilAllTaskFinish();
         }
-		
+		threadPool.shutdown();
 		
         return (Schedule)globalVars.get(VAR_GBEST);
     }

@@ -7,6 +7,9 @@ package workflowengine.utils.db;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.Mongo;
+import com.mongodb.MongoClient;
+import com.mongodb.MongoClientOptions;
+import com.mongodb.ServerAddress;
 import difsys.DifsysFile;
 import java.net.UnknownHostException;
 import java.util.logging.Level;
@@ -30,16 +33,16 @@ public class MongoDB
 	{
 		try
 		{
+			MongoClientOptions mOpt = MongoClientOptions.builder()
+					.threadsAllowedToBlockForConnectionMultiplier(100)
+					.build();
+			MongoClient mClient = new MongoClient(new ServerAddress(
+					Utils.getProp("DBHost"), 
+					Utils.getIntProp("DBPort")), mOpt);
 			String thisURI = Utils.getProp("local_hostname")+"_"+Utils.getProp("local_port");
-			DB db = new Mongo(
-					Utils.getProp("DBHost"), 
-					Utils.getIntProp("DBPort"))
-					.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_'));
+			DB db = mClient.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_'));
 			db.dropDatabase();
-			db = new Mongo(
-					Utils.getProp("DBHost"), 
-					Utils.getIntProp("DBPort"))
-					.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_'));
+			db = mClient.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_'));
 			
 			WORKFLOW = db.getCollection("workflow");
 			TASK = db.getCollection("task");
@@ -47,10 +50,7 @@ public class MongoDB
 			SCHEDULE = db.getCollection("schedule");
 			
 			
-			db = new Mongo(
-					Utils.getProp("DBHost"), 
-					Utils.getIntProp("DBPort"))
-					.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_')+"_stats");
+			db = mClient.getDB(Utils.getProp("DBName")+"_"+thisURI.replace('.', '_')+"_stats");
 			EXEC_TIME = db.getCollection("execution_time");
 			WORKFLOW_SUBMIT_INFO = db.getCollection("workflow_submit_info");
 			

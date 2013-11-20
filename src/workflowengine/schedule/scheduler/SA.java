@@ -20,12 +20,6 @@ public class SA implements Scheduler
     static int DECREASE_RATE = 1;
     static final Random r = new Random();
     
-    private Schedule bestSolution;
-    private double bestFit = Double.POSITIVE_INFINITY;
-	private String[] workers;
-	private String[] tasks;
-	private UniqueMap<Integer, String> workerMap;
-    
     public SA()
     {
         Utils.setPropIfNotExist(PROP_START_TEMP, "100");
@@ -39,21 +33,42 @@ public class SA implements Scheduler
         
     }
     
-    @Override
-    public Schedule getSchedule(SchedulingSettings settings)
+    
+	@Override
+	public Schedule getSchedule(SchedulingSettings settings)
+	{
+		return getSchedule(settings, null);
+	}
+	
+    public Schedule getSchedule(SchedulingSettings settings, Schedule initSchedule)
     {
-		workers = settings.getSiteArray();
-		tasks = settings.getTaskArray();
-		workerMap = UniqueMap.fromArray(workers);
+		
+		UniqueMap<Integer, String> workerMap = (UniqueMap<Integer, String>)
+				settings.getObjectParam("workerMap");
+		String[] workers = (String[])settings.getObjectParam("workers");
+		String[] tasks = (String[])settings.getObjectParam("tasks");
+		
+		if(workers == null)
+		{
+			workers = settings.getSiteArray();
+		}
+		if(tasks == null)
+		{
+			tasks = settings.getTaskArray();
+		}
+		if(workerMap == null)
+		{
+			workerMap = UniqueMap.fromArray(workers);
+		}
 		
 		
-        bestSolution = null;
+        Schedule bestSolution;
         int curTemp;
         double curFit;
         Schedule solution ;
-        if(settings.hasParam("init_schedule"))
+        if(initSchedule != null)
         {
-            solution = (Schedule)settings.getObjectParam("init_schedule");
+            solution = initSchedule;
         }
         else
         {
@@ -61,7 +76,7 @@ public class SA implements Scheduler
             solution.random();
         }
         curFit = solution.getFitness();
-        bestFit = curFit;
+        double bestFit = curFit;
         bestSolution = solution.copy();
         for (curTemp = START_TEMP; curTemp > STOP_TEMP; curTemp -= DECREASE_RATE)
         {
@@ -69,7 +84,27 @@ public class SA implements Scheduler
             {
                 Schedule tempSolution = solution.copy();
                 double tempFit;
-                slightChange(tempSolution, settings);
+				
+				
+//                slightChange(tempSolution, settings);
+				for (int ti = 0; ti < settings.getTotalTasks(); ti++)
+				{
+					int wkId = workerMap.getKey(tempSolution.getWorkerForTask(tasks[ti]));
+					if (r.nextBoolean())
+					{
+						wkId++;
+						wkId = Math.min(wkId, workers.length - 1);
+					}
+					else
+					{
+						wkId--;
+						wkId = Math.max(wkId, 0);
+					}
+					tempSolution.setWorkerForTask(tasks[ti], workers[wkId]);
+				}
+				
+				
+				
                 tempFit = tempSolution.getFitness();
                 if (tempFit < bestFit)
                 {
@@ -104,22 +139,22 @@ public class SA implements Scheduler
     }
 
 
-    void slightChange(Schedule sch, SchedulingSettings ss)
-    {
-        for (int i = 0; i < ss.getTotalTasks(); i++)
-        {
-            int wkId = workerMap.getKey(sch.getWorkerForTask(tasks[i]));
-            if (r.nextBoolean())
-            {
-                wkId++;
-                wkId = Math.min(wkId, workers.length - 1);
-            }
-            else
-            {
-                wkId--;
-                wkId = Math.max(wkId, 0);
-            }
-            sch.setWorkerForTask(tasks[i], workers[wkId]);
-        }
-    }
+//    void slightChange(Schedule sch, SchedulingSettings ss)
+//    {
+//        for (int i = 0; i < ss.getTotalTasks(); i++)
+//        {
+//            int wkId = workerMap.getKey(sch.getWorkerForTask(tasks[i]));
+//            if (r.nextBoolean())
+//            {
+//                wkId++;
+//                wkId = Math.min(wkId, workers.length - 1);
+//            }
+//            else
+//            {
+//                wkId--;
+//                wkId = Math.max(wkId, 0);
+//            }
+//            sch.setWorkerForTask(tasks[i], workers[wkId]);
+//        }
+//    }
 }

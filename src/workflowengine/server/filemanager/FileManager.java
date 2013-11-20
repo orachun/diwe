@@ -5,6 +5,7 @@
 package workflowengine.server.filemanager;
 
 import java.util.Set;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -14,8 +15,13 @@ public abstract class FileManager
 {
 	public static FileManager get()
 	{
-//		return DIFileManager.get();
-		return ServerClientFileManager.get();
+		Utils.setPropIfNotExist("file_manager", "ServerClientFileManager");
+		String fmName = Utils.getProp("file_manager");
+		switch(fmName)
+		{
+			case "DIFileManager" : return DIFileManager.get();
+			default: return ServerClientFileManager.get();
+		}
 	}
 	
 	public abstract void waitForFile(String name);

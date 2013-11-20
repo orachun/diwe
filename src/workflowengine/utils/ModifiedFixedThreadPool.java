@@ -25,18 +25,36 @@ public class ModifiedFixedThreadPool implements ExecutorService
 	private ExecutorService pool;
 	private Map<Future, Future> futures = new ConcurrentHashMap<>();
 
+	public ModifiedFixedThreadPool()
+	{
+		this(Runtime.getRuntime().availableProcessors()*3);
+	}
+	
 	public ModifiedFixedThreadPool(int threads)
 	{
 		pool = Executors.newFixedThreadPool(threads);
 	}
 	
-	public void waitUntilAllTaskFinish() throws ExecutionException, InterruptedException
+	public void waitUntilAllTaskFinish()
 	{
-		for(Future f : futures.keySet())
+		try
 		{
-			f.get();
-			futures.remove(f);
+			for (Future f : futures.keySet())
+			{
+				f.get();
+				futures.remove(f);
+			}
 		}
+		catch (ExecutionException | InterruptedException e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public void waitUntilAllTaskFinishAndShutdown()
+	{
+		waitUntilAllTaskFinish();
+		shutdown();
 	}
 	
 	@Override

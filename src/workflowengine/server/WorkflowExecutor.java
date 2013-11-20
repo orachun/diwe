@@ -22,9 +22,9 @@ import workflowengine.resource.RemoteWorker;
 import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
+import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
-import workflowengine.utils.Checkpointing;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
@@ -66,20 +66,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 
 	protected WorkflowExecutor(boolean registerForRMI, String name)  //throws RemoteException
 	{
-//		new Thread()
-//		{
-//			@Override
-//			public void run()
-//			{
-//				while(true)
-//				{
-//					Utils.bash("nc -l 19191 > /dev/null", true);
-//				}
-//			}
-//		}.start();
-		
-//		Checkpointing.startCoordinator();
-		
+
 		eventLogger = new EventLogger();
 		eventLogger.start("EXEC_INIT", "Initializing executor");
 		Utils.mkdirs(Utils.getProp("working_dir"));
@@ -120,7 +107,6 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 					manager = (WorkflowExecutorInterface) WorkflowExecutor
 							.getRemoteExecutor(managerURI);
 				}
-				
 			}
 			System.out.println("Done.");
 			System.out.println("Initializing file manager...");
@@ -222,7 +208,8 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 
 	protected FC getDefaultFC()
 	{
-		return new CostOptimizationFC();
+		return new MakespanFC();
+//		return new CostOptimizationFC();
 	}
 
 	public String getURI()

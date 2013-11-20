@@ -91,13 +91,16 @@ public class PSOIndividual extends Schedule
     
     void calVelocity()
     {
-        PSOIndividual gBest = (PSOIndividual)globalVars.get(PSO.VAR_GBEST);
-        for (int i = startTask; i < endTask; i++)
-        {
-            velocity[i] = INERTIA_WEIGHT * velocity[i] 
-                    + (PBEST_WEIGHT * r.nextDouble() * (pBest.position[i] - position[i])) 
-                    + (GBEST_WEIGHT * r.nextDouble() * (gBest.position[i] - position[i]));
-        }
+        final PSOIndividual gBest = (PSOIndividual)globalVars.get(PSO.VAR_GBEST);
+		synchronized(gBest)
+		{
+			for (int i = startTask; i < endTask; i++)
+			{
+				velocity[i] = INERTIA_WEIGHT * velocity[i] 
+						+ (PBEST_WEIGHT * r.nextDouble() * (pBest.position[i] - position[i])) 
+						+ (GBEST_WEIGHT * r.nextDouble() * (gBest.position[i] - position[i]));
+			}
+		}
     }
 
     void updatePosition()

@@ -328,6 +328,13 @@ public class SiteManager extends WorkflowExecutor
 			
 			
 			wf.saveStat(cost);
+			
+			
+			if(Utils.hasProp("shutdown_when_workflow_finish") 
+					&& Utils.getIntProp("shutdown_when_workflow_finish") == 1)
+			{
+				shutdown();
+			}
 		}
 	}
 	
@@ -401,13 +408,16 @@ public class SiteManager extends WorkflowExecutor
 				((DIFileManager) FileManager.get()).workerJoined(uri);
 				Set<String> peers = new HashSet<>(getWorkerSet());
 				peers.add(this.uri);
+				
+				//Broadcast peer info
 				for(String p : peers)
 				{
+					//Give all peer info to new added peer
 					if(p.equals(uri))
 					{
 						((DIFileManager) FileManager.get()).setPeerSet(p, peers);
 					}
-					else
+					else //Give new peer info to the others
 					{
 						((DIFileManager) FileManager.get()).addPeer(p, uri);
 					}
@@ -545,9 +555,15 @@ public class SiteManager extends WorkflowExecutor
 	private boolean rescheduling = false;
 	private static final double DELAY_TIME_THRESHOLD = 60;
 	private static final double PERCENT_COST_REDUCE_THRESHOLD = 10;
-	private static final double RESCHEDULING_INTERVAL = 30;
+	private static final double RESCHEDULING_INTERVAL = 100;
 	public void rescheduleIfNeeded(TaskStatus status)
 	{
+		//Disable rescheduling feature
+		if(true)
+		{
+			return;
+		}
+		
 		//TODO: check when rescheduling is needed
 		if(Utils.getIntProp("dynamic") == 0 || rescheduling)
 		{
@@ -580,9 +596,9 @@ public class SiteManager extends WorkflowExecutor
 		Workflow oriWf = Workflow.get(superWfid);
 		double timeSinceStart = Utils.time() - oriWf.getScheduledTime();
 		double costSinceStart = getTotalCost();
-		
-		synchronized(DISPATCH_LOCK)
-		{
+//		
+//		synchronized(DISPATCH_LOCK)
+//		{
 			Workflow oldWf = Workflow.get(superWfid);
 			Workflow wf = oldWf.getSubWorkflowOfRemainTasks();
 			if(wf.getTotalTasks() == 0)
@@ -614,36 +630,39 @@ public class SiteManager extends WorkflowExecutor
 			System.out.println("Old cost: "+oldSch.getCost());
 			
 			System.out.println("Percent Reduce: "+percentCostReduce);
-			if(percentCostReduce > PERCENT_COST_REDUCE_THRESHOLD)
+			if (percentCostReduce > PERCENT_COST_REDUCE_THRESHOLD)
 			{
-				s.save();
-
-				Set<SuspendedTaskInfo> suspendedTasks = suspendRunningTasks();
-				System.out.println("Suspended: "+suspendedTasks.size());
-				if(!suspendedTasks.isEmpty())
+				synchronized (DISPATCH_LOCK)
 				{
-					for(SuspendedTaskInfo sinfo : suspendedTasks)
-					{
-						sinfo.ckptFile.cache();
-						Task t = Task.get(sinfo.tid);
-						t.setCkptFid(sinfo.ckptFile.getUUID());
-					}
+					s.save();
 
-					wf.generateInputOutputFileList();
-					removeWorkflowFromQueue(superWfid);
-	//				for(String tid : wf.getTaskSet())
-	//				{
-	//					Task t = Task.get(tid);
-	//					if(t.getStatus().status != TaskStatus.STATUS_COMPLETED 
-	//							&& t.getStatus().status != TaskStatus.STATUS_SUSPENDED)
-	//					{
-	//						t.setStatus(TaskStatus.waitingStatus(tid));
-	//					}
-	//				}
-					taskQueue.submit(s);
+					Set<SuspendedTaskInfo> suspendedTasks = suspendRunningTasks();
+					System.out.println("Suspended: " + suspendedTasks.size());
+					if (!suspendedTasks.isEmpty())
+					{
+						for (SuspendedTaskInfo sinfo : suspendedTasks)
+						{
+							sinfo.ckptFile.cache();
+							Task t = Task.get(sinfo.tid);
+							t.setCkptFid(sinfo.ckptFile.getUUID());
+						}
+
+						wf.generateInputOutputFileList();
+						removeWorkflowFromQueue(superWfid);
+		//				for(String tid : wf.getTaskSet())
+		//				{
+		//					Task t = Task.get(tid);
+		//					if(t.getStatus().status != TaskStatus.STATUS_COMPLETED 
+		//							&& t.getStatus().status != TaskStatus.STATUS_SUSPENDED)
+		//					{
+		//						t.setStatus(TaskStatus.waitingStatus(tid));
+		//					}
+		//				}
+						taskQueue.submit(s);
+					}
 				}
 			}
-		}
+//		}
 		lastRescheduling = Utils.time();
 		rescheduling = false;
 //		System.out.println("Done.");

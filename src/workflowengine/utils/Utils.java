@@ -101,6 +101,21 @@ public class Utils
             }
         }
     }
+	
+	public static void saveProp()
+	{
+		initProp();
+		try
+		{
+			OutputStream os = new FileOutputStream(CONFIG_FILE);
+			PROP.store(os, "");
+			os.close();
+		}
+		catch (IOException ex)
+		{
+			System.err.println("WARNING: Cannot store the configuration file " + CONFIG_FILE + ".");
+		}
+	}
     
     public static void setProp(Properties p)
     {
