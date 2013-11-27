@@ -5,6 +5,7 @@
 package workflowengine.server.filemanager;
 
 import java.util.Set;
+import workflowengine.server.filemanager.difm.NewDIFM;
 import workflowengine.utils.Utils;
 
 /**
@@ -20,6 +21,7 @@ public abstract class FileManager
 		switch(fmName)
 		{
 			case "DIFileManager" : return DIFileManager.get();
+			case "NewDIFM" : return NewDIFM.get();
 			default: return ServerClientFileManager.get();
 		}
 	}

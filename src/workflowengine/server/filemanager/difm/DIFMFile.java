@@ -211,9 +211,9 @@ public class DIFMFile
 		}
 	}
 	
-	public Piece getPieceToDownload()
+	public Piece getPieceToDownload(BitSet interesting)
 	{
-		return DIUtils.getElementProportionally(rarestPcs, 5);
+		return DIUtils.getPieceProportionally(rarestPcs, 5, interesting);
 	}
 
 	

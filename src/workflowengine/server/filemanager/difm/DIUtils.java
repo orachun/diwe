@@ -5,6 +5,7 @@
 package workflowengine.server.filemanager.difm;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -12,6 +13,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.SortedSet;
+import lipermi.net.Client;
+import workflowengine.utils.Utils;
 
 /**
  *
@@ -19,16 +22,37 @@ import java.util.SortedSet;
  */
 public class DIUtils
 {
+	private static int PORT_SHIFT = 100;
 	private static Random r = new Random();
-	static <T extends Object> T getElementProportionally(SortedSet<T> set, int candidateSize)
+	static DIFMFile getFileProportionally(SortedSet<DIFMFile> set, int candidateSize)
 	{
 		
-		ArrayList<T> candidates = new ArrayList<>(candidateSize);
-		Iterator<T> iterator = set.iterator();
+		ArrayList<DIFMFile> candidates = new ArrayList<>(candidateSize);
+		Iterator<DIFMFile> iterator = set.iterator();
 		for(int i=0;i<candidateSize && iterator.hasNext();i++)
 		{
-			T f = iterator.next();
+			DIFMFile f = iterator.next();
 			candidates.add(f);
+		}
+		if(!candidates.isEmpty())
+		{
+			return candidates.get(r.nextInt(candidates.size()));
+		}
+		return null;
+	}
+	
+	static Piece getPieceProportionally(SortedSet<Piece> set, int candidateSize, BitSet interesting)
+	{
+		
+		ArrayList<Piece> candidates = new ArrayList<>(candidateSize);
+		Iterator<Piece> iterator = set.iterator();
+		while(candidates.size() < candidateSize && iterator.hasNext())
+		{
+			Piece p = iterator.next();
+			if(interesting.get(p.index))
+			{
+				candidates.add(p);
+			}
 		}
 		if(!candidates.isEmpty())
 		{
@@ -39,12 +63,37 @@ public class DIUtils
 	
 	static PeerInterface getPeerFromURI(String uri)
 	{
-		throw new IllegalStateException("not implemented");
+		PeerInterface peer = null;
+		int tries = 0;
+		String[] s = uri.split(":");
+		String realURI = s[0] + ":" + (PORT_SHIFT + Integer.parseInt(s[1]));
+		while (peer == null && tries < 10)
+		{
+			try
+			{
+				Client c = Utils.getRMIClient(realURI);
+				peer = (PeerInterface) c.getGlobal(PeerInterface.class);
+			}
+			catch (Exception e)
+			{
+				peer = null;
+				tries++;
+				try
+				{
+					Thread.sleep(1000);
+				}
+				catch (InterruptedException ex)
+				{
+				}
+			}
+		}
+		return peer;
 	}
 	
 	static void registerLocalPeer(String uri, PeerInterface peer)
 	{
-		
+		Utils.registerRMIServer(PeerInterface.class, peer, 
+				PORT_SHIFT + Utils.getIntProp("local_port"));
 	}
 	
 	static void mergeFileMap(Map<String, Set<String>> from, Map<String, Set<String>> to)

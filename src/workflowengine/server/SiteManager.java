@@ -21,7 +21,6 @@ import workflowengine.schedule.Schedule;
 import workflowengine.schedule.ScheduleTable;
 import workflowengine.schedule.SchedulingSettings;
 import workflowengine.schedule.Site;
-import workflowengine.schedule.scheduler.HEFT;
 import workflowengine.schedule.scheduler.Scheduler;
 import static workflowengine.server.WorkflowExecutor.COST_PER_BYTE;
 import static workflowengine.server.WorkflowExecutor.getRemoteExecutor;
@@ -29,6 +28,7 @@ import workflowengine.server.filemanager.DIFileManager;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.server.filemanager.FileServer;
 import workflowengine.server.filemanager.ServerClientFileManager;
+import workflowengine.server.filemanager.difm.NewDIFM;
 import workflowengine.utils.Threading;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
@@ -172,6 +172,11 @@ public class SiteManager extends WorkflowExecutor
 				logger.log("Error: " + ex.getMessage(), ex);
 			}
 		}
+		else if(FileManager.get() instanceof NewDIFM)
+		{
+			taskQueue.submit(s);
+			((NewDIFM)FileManager.get()).setSchedule(s);
+		}
 		else
 		{
 			taskQueue.submit(s);
@@ -239,10 +244,8 @@ public class SiteManager extends WorkflowExecutor
 				{
 					//Inactivate file transferring if the file is not needed by any
 					//incompleted tasks
-					if (FileManager.get() instanceof DIFileManager)
-					{
-						deactivateFilesIfNotUsed(t, status.schEntry.superWfid, true, false);
-					}
+					deactivateFilesIfNotUsed(t, status.schEntry.superWfid, true, false);
+					
 					runningTasks.put(status.taskID, status.schEntry.target);
 				}
 				else if (status.status == TaskStatus.STATUS_COMPLETED)
@@ -253,11 +256,8 @@ public class SiteManager extends WorkflowExecutor
 
 					//Inactivate file transferring if the file is not needed by any
 					//incompleted tasks
-					if (FileManager.get() instanceof DIFileManager)
-					{
-						deactivateFilesIfNotUsed(t, status.schEntry.superWfid, true, true);
-					}
-
+					deactivateFilesIfNotUsed(t, status.schEntry.superWfid, true, true);
+					
 					updateRemainTasks(status);
 					rescheduleIfNeeded(status);
 				}
@@ -283,7 +283,8 @@ public class SiteManager extends WorkflowExecutor
 		if (manager != null && status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			//Upload output files
-			if (FileManager.get() instanceof ServerClientFileManager)
+			if (FileManager.get() instanceof ServerClientFileManager
+					|| FileManager.get() instanceof NewDIFM )
 			{
 				Set<String> outFiles = new HashSet<>();
 				for (String wff : t.getOutputFiles())
@@ -340,6 +341,10 @@ public class SiteManager extends WorkflowExecutor
 	
 	private void deactivateFilesIfNotUsed(final Task t, final String superWfid, final boolean input, final boolean output)
 	{
+		if(FileManager.get() instanceof ServerClientFileManager)
+		{
+			return;
+		}
 		Threading.submitTask(new Runnable()
 		{
 			@Override
@@ -348,14 +353,17 @@ public class SiteManager extends WorkflowExecutor
 				Workflow wf = Workflow.get(superWfid);
 				if (wf != null)
 				{
-					Set<String> inactiveFiles = new HashSet<>();
+//					Set<String> inactiveFiles = new HashSet<>();
+					NewDIFM fileManager = (NewDIFM)FileManager.get();
 					if(input)
 					{
 						for (String fid : t.getInputFiles())
 						{
 							if (!wf.isFileActive(fid))
 							{
-								inactiveFiles.add(WorkflowFile.get(fid)
+//								inactiveFiles.add(WorkflowFile.get(fid)
+//										.getName(superWfid));
+								fileManager.inactivateFile(WorkflowFile.get(fid)
 										.getName(superWfid));
 							}
 						}
@@ -366,15 +374,17 @@ public class SiteManager extends WorkflowExecutor
 						{
 							if (!wf.isFileActive(fid) && !wf.getOutputFiles().contains(fid))
 							{
-								inactiveFiles.add(WorkflowFile.get(fid)
+//								inactiveFiles.add(WorkflowFile.get(fid)
+//										.getName(superWfid));
+								fileManager.inactivateFile(WorkflowFile.get(fid)
 										.getName(superWfid));
 							}
 						}
 					}
-					if (!inactiveFiles.isEmpty())
-					{
-						((DIFileManager) FileManager.get()).setInactiveFile(inactiveFiles);
-					}
+//					if (!inactiveFiles.isEmpty())
+//					{
+//						((DIFileManager) FileManager.get()).setInactiveFile(inactiveFiles);
+//					}
 				}
 			}
 		});
@@ -422,6 +432,10 @@ public class SiteManager extends WorkflowExecutor
 						((DIFileManager) FileManager.get()).addPeer(p, uri);
 					}
 				}
+			}
+			else if (FileManager.get() instanceof NewDIFM)
+			{
+				((NewDIFM) FileManager.get()).workerConnected(uri);
 			}
 		}
 		if (manager != null)

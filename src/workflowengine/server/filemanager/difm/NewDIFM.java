@@ -8,6 +8,7 @@ import java.nio.ByteBuffer;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import workflowengine.schedule.Schedule;
+import workflowengine.server.WorkflowExecutor;
 import workflowengine.server.filemanager.FileManager;
 import workflowengine.utils.Utils;
 import workflowengine.workflow.Task;
@@ -28,8 +30,10 @@ import workflowengine.workflow.WorkflowFile;
  *
  * @author orachun
  */
-public class Manager extends FileManager implements PeerInterface, Runnable
+public class NewDIFM extends FileManager implements PeerInterface, Runnable
 {
+	private static NewDIFM INSTANCE;
+	
 	private final Map<String, Set<String>> wantingFiles; // peer -> set of wanting files
 	private final Map<String, Set<String>> wantingPeers; // file -> set of wanting peers
 	
@@ -46,9 +50,9 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 	
 	private Map<String, String> waitingLocks;
 
-	public Manager(String uri)
+	private NewDIFM()
 	{
-		thisURI = uri;
+		thisURI = WorkflowExecutor.get().getURI();
 		wantingFiles = new ConcurrentHashMap<>();
 		wantingPeers = new ConcurrentHashMap<>();
 		fileMap = new ConcurrentHashMap<>();
@@ -82,6 +86,14 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 		DIUtils.registerLocalPeer(thisURI, this);
 	}
 
+	public static NewDIFM get()
+	{
+		if (INSTANCE == null)
+		{
+			INSTANCE = new NewDIFM();
+		}
+		return INSTANCE;
+	}
 	
 	@Override
 	public Object processMsg(MsgType t, Object msg, String fromURI)
@@ -106,12 +118,22 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 				peers.add(DIUtils.getPeerFromURI(fromURI));
 				return null;
 			}
-			case FILE_INFO:
+			case FILE_REQ_INFO:
 			{
 				Map<String, Set<String>>[] maps = (Map<String, Set<String>>[]) msg;
 				DIUtils.mergeFileMap(maps[0], wantingFiles);
 				DIUtils.mergeFileMap(maps[1], wantingPeers);
 				return null;
+			}
+			case FILE_INFO: //msg -> (Map[])file info (Keys: name, length, priority)
+			{
+				Map<String, Object> fileInfo = (Map<String, Object>)msg;
+				String name = (String)fileInfo.get("name");
+				DIFMFile file = new DIFMFile(name, 
+						(long)fileInfo.get("length"), 
+						(double)fileInfo.get("priority"), 
+						wantingPeers.get(name).size());
+				fileMap.put(name, file);
 			}
 			case FILE_INACTIVATE:
 			{
@@ -122,7 +144,27 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 		return null;
 	}
 	
-	public Object[] broadcast(MsgType t, Object msg)
+	private Object[] broadcast(final MsgType t, final Object msg, boolean wait)
+	{
+		if(wait)
+		{
+			return _doBroadcast(t, msg);
+		}
+		else
+		{
+			Thread thread = new Thread()
+			{
+
+				@Override
+				public void run()
+				{
+					_doBroadcast(t, msg);
+				}
+			};
+			return null;
+		}
+	}
+	private Object[] _doBroadcast(MsgType t, Object msg)
 	{
 		Object[] res = new Object[peers.size()];
 		int i = 0;
@@ -137,6 +179,7 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 	public void peerIsConnected(PeerInterface peer)
 	{
 		Thread t = new Thread(this);
+		downloadingThreads.add(t);
 		t.start();
 	}
 	
@@ -149,7 +192,7 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 	private Piece getPieceToDownload(PeerInterface target)
 	{
 		//Select a file to download based on priority
-		DIFMFile file = DIUtils.getElementProportionally(fileQueue, 5);
+		DIFMFile file = DIUtils.getFileProportionally(fileQueue, 5);
 		Piece p = null;
 		if(file != null)
 		{
@@ -159,7 +202,7 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 			BitSet interesting = (BitSet)remoteExisting.clone();
 			interesting.andNot(file.getExisting());
 
-			p = file.getPieceToDownload();
+			p = file.getPieceToDownload(interesting);
 		}
 		return p;
 	}
@@ -186,7 +229,7 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 	
 	public void workerConnected(String uri)
 	{
-		broadcast(MsgType.PEER_CONNECTED, uri);
+		broadcast(MsgType.PEER_CONNECTED, uri, true);
 		PeerInterface newPeer = DIUtils.getPeerFromURI(uri);
 		newPeer.processMsg(MsgType.PEER_LIST, peerURIs.toArray(), thisURI);
 		peers.add(newPeer);
@@ -225,7 +268,7 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 	public void inactivateFile(String filename)
 	{
 		_inactivateFile(fileMap.get(filename));
-		broadcast(MsgType.FILE_INACTIVATE, filename);
+		broadcast(MsgType.FILE_INACTIVATE, filename, false);
 	}
 	
 	private void fileCreated(String name, long length, double priority)
@@ -238,16 +281,7 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 		file.setIfRequired(requiredByThisPeer);
 		fileMap.put(name, file);
 		file.setComplete();
-		
-		//If there are other peers need this file, add to the queue
-		if(!peersWantThisFile.isEmpty() && !(peersWantThisFile.size() == 1 && requiredByThisPeer))
-		{
-			fileQueue.add(file);
-		}
-		else
-		{
-			fileIsDownloaded(file);
-		}
+		fileIsDownloaded(file);
 		
 		DIUtils.notifyDownloadThread(downloadingThreads);
 	}
@@ -369,14 +403,35 @@ public class Manager extends FileManager implements PeerInterface, Runnable
 		waitingLocks.remove(name);
 	}
 	
+	/**
+	 * Called when new file is created
+	 * @param fname 
+	 */
 	@Override
 	public void outputFilesCreated(Set<String> fname)
 	{
+		LinkedList<Map<String, Object>> fileToBroadcast = new LinkedList<>();
 		for(String name : fname)
 		{
 			WorkflowFile wff = WorkflowFile.get(name);
 			long length = Utils.getFileLength(name);
 			fileCreated(name, length, wff.getPriority());
+			
+			Set<String> peersWantingThisFile = wantingPeers.get(name);
+			if(peersWantingThisFile != null && 
+					!(peersWantingThisFile.size() == 1 && peersWantingThisFile.contains(thisURI)))
+			{
+				HashMap<String, Object> fileInfo = new HashMap<>();
+				fileInfo.put("name", name);
+				fileInfo.put("length", length);
+				fileInfo.put("priority", wff.getPriority());
+				fileToBroadcast.add(fileInfo);
+			}
+		}
+		
+		if(!fileToBroadcast.isEmpty())	
+		{
+			broadcast(MsgType.FILE_INFO, fileToBroadcast.toArray(), false);
 		}
 	}
 	

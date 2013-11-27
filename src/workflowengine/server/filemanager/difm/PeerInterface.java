@@ -17,7 +17,8 @@ public interface PeerInterface
 	{
 		PEER_CONNECTED,		//msg -> (String)uri
 		PEER_LIST,			//msg -> (String[])uris
-		FILE_INFO,			//msg -> (Map[2])wantingFiles, wantingPeers
+		FILE_REQ_INFO,		//msg -> (Map[2])wantingFiles, wantingPeers
+		FILE_INFO,			//msg -> (Map[])file info (Keys: name, length, priority)
 		FILE_INACTIVATE		//msg -> (String)name
 	}
 	public BitSet getExistingPcs(String file);
