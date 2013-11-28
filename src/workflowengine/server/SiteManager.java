@@ -119,6 +119,7 @@ public class SiteManager extends WorkflowExecutor
 						Utils.setExecutable(fullFilePath);
 					}
 				}
+								
 				logger.log("Done.", false);
 				eventLogger.finish("WF_INPUT_WAIT");
 
@@ -174,8 +175,8 @@ public class SiteManager extends WorkflowExecutor
 		}
 		else if(FileManager.get() instanceof NewDIFM)
 		{
-			taskQueue.submit(s);
 			((NewDIFM)FileManager.get()).setSchedule(s);
+			taskQueue.submit(s);
 		}
 		else
 		{
@@ -286,12 +287,7 @@ public class SiteManager extends WorkflowExecutor
 			if (FileManager.get() instanceof ServerClientFileManager
 					|| FileManager.get() instanceof NewDIFM )
 			{
-				Set<String> outFiles = new HashSet<>();
-				for (String wff : t.getOutputFiles())
-				{
-					outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
-				}
-				FileManager.get().outputFilesCreated(outFiles);
+				FileManager.get().outputFilesCreated(status.schEntry.superWfid, t.getOutputFiles());
 			}
 		}
 		
@@ -578,7 +574,6 @@ public class SiteManager extends WorkflowExecutor
 			return;
 		}
 		
-		//TODO: check when rescheduling is needed
 		if(Utils.getIntProp("dynamic") == 0 || rescheduling)
 		{
 			return;

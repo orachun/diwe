@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import workflowengine.server.WorkflowExecutor;
 import workflowengine.utils.Utils;
+import workflowengine.workflow.WorkflowFile;
 
 /**
  *
@@ -93,10 +94,12 @@ public class ServerClientFileManager extends FileManager
 	 * @param wff
 	 */
 	@Override
-	public void outputFilesCreated(Set<String> filenames)
+	public void outputFilesCreated(String wfid, Set<String> files)
 	{
-		for(String name : filenames)
+		for(String fid : files)
 		{
+			WorkflowFile f = WorkflowFile.get(fid);
+			String name = f.getName(wfid);
 			try
 			{
 				transferredBytes += FileServer.request(

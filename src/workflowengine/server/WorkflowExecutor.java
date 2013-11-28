@@ -19,7 +19,6 @@ import workflowengine.utils.HostAddress;
 import workflowengine.monitor.EventLogger;
 import workflowengine.monitor.HTMLUtils;
 import workflowengine.resource.RemoteWorker;
-import workflowengine.schedule.fc.CostOptimizationFC;
 import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
@@ -75,15 +74,15 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		this.uri = Utils.getProp("local_hostname")+":"+Utils.getIntProp("local_port");
 		
 		//Start default file server
-		try
-		{
-			FileServer.get(workingDir);
-		}
-		catch (IOException ex)
-		{
-			logger.log("Cannot start file server.", ex);
-			shutdown();
-		}
+//		try
+//		{
+//			FileServer.get(workingDir);
+//		}
+//		catch (IOException ex)
+//		{
+//			logger.log("Cannot start file server.", ex);
+//			shutdown();
+//		}
 		
 		//Prepare Mongo Database
 		if(!MongoDB.prepare())

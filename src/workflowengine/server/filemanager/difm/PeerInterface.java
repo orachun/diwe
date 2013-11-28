@@ -4,9 +4,6 @@
  */
 package workflowengine.server.filemanager.difm;
 
-import java.nio.ByteBuffer;
-import java.util.BitSet;
-
 /**
  *
  * @author orachun
@@ -21,7 +18,9 @@ public interface PeerInterface
 		FILE_INFO,			//msg -> (Map[])file info (Keys: name, length, priority)
 		FILE_INACTIVATE		//msg -> (String)name
 	}
-	public BitSet getExistingPcs(String file);
-	public ByteBuffer getPieceContent(String name, int index);
+	public AtomicBitSet getExistingPcs(String file);
+	public byte[] getPieceContent(String name, int index);
 	public Object processMsg(MsgType t, Object msg, String from);
+	@Override
+	public String toString();
 }

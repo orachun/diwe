@@ -228,12 +228,8 @@ public class Worker extends WorkflowExecutor
 		if (status.status == TaskStatus.STATUS_COMPLETED)
 		{
 			//Upload output files
-			Set<String> outFiles = new HashSet<>();
-			for (String wff : Task.get(status.taskID).getOutputFiles())
-			{
-				outFiles.add(WorkflowFile.get(wff).getName(status.schEntry.superWfid));
-			}
-			FileManager.get().outputFilesCreated(outFiles);
+			FileManager.get().outputFilesCreated(status.schEntry.superWfid, 
+					Task.get(status.taskID).getOutputFiles());
 		}
 		
 		logTaskStatus(status);

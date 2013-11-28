@@ -16,9 +16,9 @@ public class Piece
 	final int index;
 	final long offset;
 	private int seen;
-	final long length;
+	final int length;
 
-	public Piece(String name, int index, long offset, long length)
+	public Piece(String name, int index, long offset, int length)
 	{
 		this.name = name;
 		this.index = index;

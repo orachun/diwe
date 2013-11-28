@@ -905,10 +905,12 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 	}
 
 	@Override
-	public void outputFilesCreated(Set<String> filenames)
+	public void outputFilesCreated(String wfid, Set<String> files)
 	{
-		for (String fname : filenames)
+		for (String fid : files)
 		{
+			WorkflowFile f = WorkflowFile.get(fid);
+			String fname = f.getName(wfid);
 			long size = new File(Utils.getProp("working_dir") + "/" + fname).length();
 			for (int i = 0; i < Math.ceil(size / (double) PIECE_LEN); i++)
 			{

@@ -41,7 +41,7 @@ public class DIUtils
 		return null;
 	}
 	
-	static Piece getPieceProportionally(SortedSet<Piece> set, int candidateSize, BitSet interesting)
+	static Piece getPieceProportionally(SortedSet<Piece> set, int candidateSize, AtomicBitSet interesting)
 	{
 		
 		ArrayList<Piece> candidates = new ArrayList<>(candidateSize);
