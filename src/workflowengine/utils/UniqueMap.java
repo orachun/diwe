@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  *
@@ -15,23 +16,37 @@ import java.util.Set;
  */
 public class UniqueMap<K,V> implements Map<K,V>
 {
-	private HashMap<K,V> keyMap = new HashMap<>();
-	private HashMap<V,K> valueMap = new HashMap<>();
+	private Map<K,V> keyMap;
+	private Map<V,K> valueMap;
 	
-	public UniqueMap()
+	public UniqueMap(boolean concurrent)
 	{
-		
+		if(concurrent)
+		{
+			keyMap = new ConcurrentHashMap<>();
+			valueMap = new ConcurrentHashMap<>();
+		}
+		else
+		{
+			keyMap = new HashMap<>();
+			valueMap = new HashMap<>();
+		}
 	}
 	
 	public static <V> UniqueMap<Integer, V> fromArray(V[] array)
 	{
-		UniqueMap<Integer, V> map = new UniqueMap<>();
+		return fromArray(array, false);
+	}
+	public static <V> UniqueMap<Integer, V> fromArray(V[] array, boolean concurrent)
+	{
+		UniqueMap<Integer, V> map = new UniqueMap<>(concurrent);
 		for(int i=0;i<array.length;i++)
 		{
 			map.put(i, array[i]);
 		}
 		return map;
 	}
+	
 	
 	@Override
 	public int size()
@@ -95,11 +110,6 @@ public class UniqueMap<K,V> implements Map<K,V>
 		return keyMap.containsValue(value);
 	}
 
-	public Object clone()
-	{
-		return keyMap.clone();
-	}
-
 	public Set<K> keySet()
 	{
 		return keyMap.keySet();
@@ -113,6 +123,11 @@ public class UniqueMap<K,V> implements Map<K,V>
 	public Set<Entry<K, V>> entrySet()
 	{
 		return keyMap.entrySet();
+	}
+	
+	public Set<V> valueSet()
+	{
+		return valueMap.keySet();
 	}
 
 	

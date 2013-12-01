@@ -96,6 +96,10 @@ public class ServerClientFileManager extends FileManager
 	@Override
 	public void outputFilesCreated(String wfid, Set<String> files)
 	{
+		if(!thisSite.hasManager())
+		{
+			return;
+		}
 		for(String fid : files)
 		{
 			WorkflowFile f = WorkflowFile.get(fid);

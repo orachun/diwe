@@ -14,17 +14,13 @@ public class Piece
 {
 	final String name;
 	final int index;
-	final long offset;
 	private int seen;
-	final int length;
 
-	public Piece(String name, int index, long offset, int length)
+	public Piece(String name, int index)
 	{
 		this.name = name;
 		this.index = index;
-		this.offset = offset;
 		this.seen = 0;
-		this.length = length;
 	}
 	
 	public void seen()
@@ -40,10 +36,14 @@ public class Piece
 	@Override
 	public boolean equals(Object obj)
 	{
+		if(this == obj)
+		{
+			return true;
+		}
 		if(obj instanceof Piece)
 		{
 			Piece p = (Piece)obj;
-			return name.equals(p.name) && index==p.index;
+			return index == p.index && name.equals(p.name);
 		}
 		return false;
 	}
@@ -55,6 +55,12 @@ public class Piece
 		hash = 23 * hash + Objects.hashCode(this.name);
 		hash = 23 * hash + this.index;
 		return hash;
+	}
+
+	@Override
+	public String toString()
+	{
+		return name+"("+index+")";
 	}
 	
 	

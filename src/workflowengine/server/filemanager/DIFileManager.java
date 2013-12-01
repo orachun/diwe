@@ -515,7 +515,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 			Utils.mkdirs(Utils.getParentPath(Utils.getProp("working_dir") + "/" + name));
 			DifsysFile.addFile("/" + name, len);
 			
-			final Object lock = LockStorage.get(LockStorage.FILE_WAIT_LOCK, name);
+			final Object lock = LockStorage.getObject(LockStorage.FILE_WAIT_LOCK, name);
 			if (lock != null)
 			{
 				synchronized (lock)
@@ -884,7 +884,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 		{
 			return;
 		}
-		final Object lock = LockStorage.get(LockStorage.FILE_WAIT_LOCK, name);
+		final Object lock = LockStorage.getObject(LockStorage.FILE_WAIT_LOCK, name);
 		synchronized (lock)
 		{
 //			while (!readyFiles.contains(fname))
@@ -1422,7 +1422,7 @@ public class DIFileManager extends FileManager implements DIFileManagerInterface
 			
 			
 			//change piece no from -1 to appropriate numbers
-			final Object lock = LockStorage.get("setWorkerHasPiece", name);
+			final Object lock = LockStorage.getObject("setWorkerHasPiece", name);
 			synchronized(lock)
 			{
 				DBCursor cursor = reqPcsColl.find(new BasicDBObject("name", name)

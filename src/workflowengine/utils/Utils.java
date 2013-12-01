@@ -682,6 +682,7 @@ public class Utils
 		try {
 			callHandler.registerGlobal(c, obj);
 			server.bind(port, callHandler, new GZipFilter());
+//			server.bind(port, callHandler);
 		} catch (LipeRMIException | IOException e) {
 			e.printStackTrace();
 		}

@@ -395,10 +395,10 @@ public class Workflow implements Serializable, Savable
 					&& s != TaskStatus.STATUS_COMPLETED
 					&& t.getInputFiles().contains(fid))
 			{
-				return false;
+				return true;
 			}
 		}
-		return true;
+		return false;
 	}
 
 	public static Workflow get(String uuid)

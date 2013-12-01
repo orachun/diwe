@@ -5,8 +5,8 @@
 package workflowengine.server.filemanager.difm;
 
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Comparator;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.SortedSet;
 import lipermi.net.Client;
 import workflowengine.utils.Utils;
+
+import static workflowengine.server.filemanager.difm.NewDIFM.END_GAME_MODE_RATIO;
 
 /**
  *
@@ -26,17 +28,30 @@ public class DIUtils
 	private static Random r = new Random();
 	static DIFMFile getFileProportionally(SortedSet<DIFMFile> set, int candidateSize)
 	{
-		
 		ArrayList<DIFMFile> candidates = new ArrayList<>(candidateSize);
 		Iterator<DIFMFile> iterator = set.iterator();
-		for(int i=0;i<candidateSize && iterator.hasNext();i++)
+		try
 		{
-			DIFMFile f = iterator.next();
-			candidates.add(f);
+			while(candidates.size() < candidateSize && iterator.hasNext())
+			{
+				DIFMFile f = iterator.next();
+				if(!f.isCompleted() && f.getPercentDownloaded() > END_GAME_MODE_RATIO)
+				{
+					return f;
+				}
+				candidates.add(f);
+			}
+			if(!candidates.isEmpty())
+			{
+				return candidates.get(r.nextInt(candidates.size()));
+			}
 		}
-		if(!candidates.isEmpty())
+		catch(ConcurrentModificationException e)
 		{
-			return candidates.get(r.nextInt(candidates.size()));
+			if(!candidates.isEmpty())
+			{
+				return candidates.get(r.nextInt(candidates.size()));
+			}
 		}
 		return null;
 	}
@@ -129,6 +144,10 @@ public class DIUtils
 		@Override
 		public int compare(Piece o1, Piece o2)
 		{
+			if(o1.equals(o2))
+			{
+				return 0;
+			}
 			if(o1.getSeen() < o2.getSeen())
 			{
 				return -1;
@@ -137,11 +156,12 @@ public class DIUtils
 			{
 				return 1;
 			}
-			return (Math.random() > 0.5) ? -1 : 1;
+			//return Math.random() > 0.5 ? -1 : 1;
+			return o1.toString().compareTo(o2.toString());
 		}
 	};
 	
-	static Comparator<Piece> getPieceComparator()
+	public static Comparator<Piece> getPieceComparator()
 	{
 		return pieceComparator;
 	}

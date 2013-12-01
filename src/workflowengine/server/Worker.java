@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import workflowengine.workflow.TaskStatus;
 import workflowengine.resource.ExecutorNetwork;
 import workflowengine.resource.RemoteWorker;
@@ -36,7 +37,7 @@ public class Worker extends WorkflowExecutor
 //	protected static Worker instant;
 	private ExecutorNetwork execNetwork;
 	private ExecutingProcessor[] processors;
-	private int workingProcessors = 0;
+	private AtomicInteger workingProcessors = new AtomicInteger(0);
 
 	private ExecutorService execThreadPool;
 	private ExecutorService setTaskStatusThreadPool;
@@ -144,7 +145,7 @@ public class Worker extends WorkflowExecutor
 		dispatchingThreads++;
 		synchronized(this)
 		{
-			while (workingProcessors < totalProcessors && !taskQueue.isEmpty())
+			while (workingProcessors.get() < totalProcessors && !taskQueue.isEmpty())
 			{
 				final ScheduleEntry se = taskQueue.poll();
 				if (se != null)
@@ -154,8 +155,10 @@ public class Worker extends WorkflowExecutor
 						@Override
 						public void run()
 						{
+							try{
 							Task t = Task.get(se.taskUUID);
 							System.out.println("Dispatching "+t.getName());
+							Thread.currentThread().setName("Dispatching "+t.getName());
 							if(t.getStatus().status != TaskStatus.STATUS_COMPLETED && 
 									t.getStatus().status != TaskStatus.STATUS_EXECUTING)
 							{
@@ -169,13 +172,16 @@ public class Worker extends WorkflowExecutor
 								p.exec(Task.get(se.taskUUID), se);
 							}
 							
-							synchronized(Worker.this)
+							workingProcessors.decrementAndGet();
+							}catch(Exception e)
 							{
-								workingProcessors--;
+								e.printStackTrace();
 							}
+							
+							Thread.currentThread().setName("Idle thread");
 						}
 					});
-					workingProcessors++;
+					workingProcessors.incrementAndGet();
 				}
 				else
 				{

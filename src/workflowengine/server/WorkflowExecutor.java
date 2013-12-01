@@ -23,7 +23,6 @@ import workflowengine.schedule.scheduler.Scheduler;
 import workflowengine.schedule.fc.FC;
 import workflowengine.schedule.fc.MakespanFC;
 import workflowengine.server.filemanager.FileManager;
-import workflowengine.server.filemanager.FileServer;
 import workflowengine.utils.Logger;
 import workflowengine.utils.SystemStats;
 import workflowengine.utils.Utils;
@@ -106,6 +105,11 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 					manager = (WorkflowExecutorInterface) WorkflowExecutor
 							.getRemoteExecutor(managerURI);
 				}
+			}
+			else
+			{
+				managerURI = null;
+				manager = null;
 			}
 			System.out.println("Done.");
 			System.out.println("Initializing file manager...");
@@ -357,6 +361,7 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 			String workflowDir = getWorkingDir()+"/"+wf.getSuperWfid();
 			Utils.mkdirs(workflowDir);
 			Utils.cp(input_dir+"/*", workflowDir);
+			FileManager.get().outputFilesCreated(wf.getSuperWfid(), wf.getInputFiles());
 			submit(wf, prop);
 		}
 		catch (IOException ex)
@@ -482,6 +487,10 @@ public abstract class WorkflowExecutor implements WorkflowExecutorInterface
 		throw new RuntimeException("not implemented yet");
 	}
 	
+	public boolean hasManager()
+	{
+		return manager != null;
+	}
 	
 	
 	

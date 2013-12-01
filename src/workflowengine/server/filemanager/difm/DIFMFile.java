@@ -12,47 +12,50 @@ import java.nio.channels.FileChannel;
 import java.util.Collections;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import workflowengine.utils.Utils;
-
+ import static workflowengine.server.filemanager.difm.NewDIFM.PIECE_LEN;
 /**
  *
  * @author orachun
  */
 public class DIFMFile
 {
-	private static int PIECE_LEN = 50*1024*1024; //50MB
-	private String name;
+	final private String name;
 	private FileChannel channel;
-	private AtomicBitSet existing;
-	private Piece[] pieces; //piece meta-data
+	final private AtomicBitSet existing;
+	final private Piece[] pieces; //piece meta-data
 	private boolean requiring;
 	private boolean active;
-	private double priority;
+	final private double priority;
 	private int requiringPeers;
-	private SortedSet<Piece> rarestPcs;
+	final private SortedSet<Piece> rarestPcs;
+	private AtomicBitSet requesting;
+	private long length;
 
-	public DIFMFile(String name, long length, double priority, int requiringPeers)
+	public DIFMFile(String name, long length, double priority, int requiringPeers, boolean required)
 	{
 		this.name = name;
 		this.active = true;
 		this.priority = priority;
 		this.requiringPeers = requiringPeers;
+		this.requiring = required;
+		this.length = length;
 		int pieceCount = (int)Math.ceil(length/(double)PIECE_LEN);
 		pieces = new Piece[pieceCount];
 		rarestPcs = Collections.synchronizedSortedSet(
 				new TreeSet<>(DIUtils.getPieceComparator()));
 		for(int i=0;i<pieceCount;i++)
 		{
-			int pcsLen = (int)((i == pieceCount-1) ? length % PIECE_LEN : PIECE_LEN);
-			Piece p = new Piece(name, i, i*PIECE_LEN, pcsLen);
+			Piece p = new Piece(name, i);
 			pieces[i] = p;
 			rarestPcs.add(p);
 		}
 		
 		existing = new AtomicBitSet(pieceCount);
+		requesting = new AtomicBitSet(pieceCount);
 		try
 		{
 			File f = new File(Utils.getProp("working_dir") + "/" + name);
@@ -70,10 +73,17 @@ public class DIFMFile
 	 * Set whether this file is required by the local peer
 	 * @param r 
 	 */
-	public void setIfRequired(boolean r)
+	public void setRequired(boolean r)
 	{
 		requiring = r;
 	}
+
+	public boolean isRequired()
+	{
+		return requiring;
+	}
+	
+	
 	
 	/**
 	 * Set this file as completely downloaded
@@ -89,14 +99,55 @@ public class DIFMFile
 	 */
 	public boolean isCompleted()
 	{
-		return existing.cardinality() == pieces.length;
+		return pieces.length == existing.cardinality();
 	}
+	
+	public void setRequesting(int index, boolean r)
+	{
+		if(r)
+		{
+			requesting.set(index);
+		}
+		else
+		{
+			requesting.clear(index);
+		}
+	}
+
+	public AtomicBitSet getRequesting()
+	{
+		return requesting;
+	}
+	
+	
 		
 	public AtomicBitSet getExisting()
 	{
 		return existing;
 	}
 
+	/**
+	 * Number of inexistent pieces
+	 * @return 
+	 */
+	public int getRemainingPcs()
+	{
+		return pieces.length - existing.cardinality();
+	}
+	/**
+	 * Number of existing pieces
+	 * @return 
+	 */
+	public int getDownloadedPcs()
+	{
+		return existing.cardinality();
+	}
+	
+	public double getPercentDownloaded()
+	{
+		return existing.cardinality()/(double)pieces.length*100;
+	}
+	
 	public int getRequiringPeers()
 	{
 		return requiringPeers;
@@ -117,6 +168,10 @@ public class DIFMFile
 		return active;
 	}
 	
+	public int getPieceLength(int index)
+	{
+		return (int)((index == pieces.length-1) ? length % PIECE_LEN : PIECE_LEN);
+	}
 	
 	/**
 	 * Record retrieved piece into the file system
@@ -124,10 +179,10 @@ public class DIFMFile
 	 */
 	public void write(int pieceIndex, byte[] content, int length)
 	{
-		if(isCompleted())
-		{
-			return;
-		}
+//		if(isCompleted())
+//		{
+//			return;
+//		}
 		ByteBuffer contentBuffer = ByteBuffer.wrap(content);
 		try
 		{
@@ -136,8 +191,9 @@ public class DIFMFile
 			{
 				if(!existing.get(pieceIndex))
 				{
-					channel.position(p.offset);
-					if(channel.write(contentBuffer, p.offset) != length)
+					long offset = p.index*PIECE_LEN;
+					channel.position(offset);
+					if(channel.write(contentBuffer, offset) != length)
 					{
 						throw new IOException("Cannot write all bytes");
 					}
@@ -157,8 +213,9 @@ public class DIFMFile
 		try
 		{
 			Piece p = pieces[pieceIndex];
-			channel.position(p.offset);
-			if(channel.read(content, p.offset) != length)
+			long offset = p.index*PIECE_LEN;
+			channel.position(offset);
+			if(channel.read(content, offset) != length)
 			{
 				throw new IOException("Cannot read all bytes");
 			}
@@ -222,18 +279,34 @@ public class DIFMFile
 	
 	public void incrementPieceSeen(AtomicBitSet available)
 	{
-		for(int i=available.nextSetBit(0);i>=0;i=available.nextSetBit(i+1))
+		for (int i = available.nextSetBit(0); i >= 0; i = available.nextSetBit(i + 1))
 		{
-			rarestPcs.remove(pieces[i]);
-			pieces[i].seen();
-			rarestPcs.add(pieces[i]);
+			seenPiece(i);
 		}
+		
+	}
+	
+	
+	private ReentrantReadWriteLock rarestLocks = new ReentrantReadWriteLock(true);
+	public void seenPiece(int index)
+	{
+		rarestLocks.readLock().lock();
+		rarestPcs.remove(pieces[index]);
+		pieces[index].seen();
+		rarestPcs.add(pieces[index]);
+		rarestLocks.readLock().unlock();
 	}
 	
 	public Piece getPieceToDownload(AtomicBitSet interesting)
 	{
-		return DIUtils.getPieceProportionally(rarestPcs, 5, interesting);
+		if(interesting.cardinality() == 0)
+		{
+			return null;
+		}
+		rarestLocks.writeLock().lock();
+		Piece p = DIUtils.getPieceProportionally(rarestPcs, 20, interesting);
+		rarestLocks.writeLock().unlock();
+		return p;
 	}
-
 	
 }

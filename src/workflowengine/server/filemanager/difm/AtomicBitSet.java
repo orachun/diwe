@@ -22,24 +22,28 @@ public class AtomicBitSet implements Serializable, Cloneable
 
 	public AtomicBitSet(int nBits)
 	{
+		write.lock();
 		this.bitSet = new BitSet(nBits);
+		write.unlock();
 	}
 	
 	private AtomicBitSet(BitSet set)
 	{
+		write.lock();
 		this.bitSet = (BitSet)set.clone();
+		write.unlock();
 	}
 		
 	
 	
-	public void set(int bitIndex)
+	public  void set(int bitIndex)
 	{
 		write.lock();
 		bitSet.set(bitIndex);
 		write.unlock();
 	}
 
-	public void set(int fromIndex, int toIndex)
+	public  void set(int fromIndex, int toIndex)
 	{
 		write.lock();
 		bitSet.set(fromIndex, toIndex);
@@ -48,14 +52,14 @@ public class AtomicBitSet implements Serializable, Cloneable
 	
 	
 	
-	public void clear(int bitIndex)
+	public  void clear(int bitIndex)
 	{
 		write.lock();
 		bitSet.clear(bitIndex);
 		write.unlock();
 	}
 		
-	public boolean get(int bitIndex)
+	public  boolean get(int bitIndex)
 	{
 		read.lock();
 		boolean r = bitSet.get(bitIndex);
@@ -64,7 +68,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public int nextSetBit(int fromIndex)
+	public  int nextSetBit(int fromIndex)
 	{
 		read.lock();
 		int r = bitSet.nextSetBit(fromIndex);
@@ -73,7 +77,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public int nextClearBit(int fromIndex)
+	public  int nextClearBit(int fromIndex)
 	{
 		read.lock();
 		int r = bitSet.nextClearBit(fromIndex);
@@ -82,7 +86,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public int previousSetBit(int fromIndex)
+	public  int previousSetBit(int fromIndex)
 	{
 		read.lock();
 		int r = bitSet.previousSetBit(fromIndex);
@@ -91,7 +95,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public int previousClearBit(int fromIndex)
+	public  int previousClearBit(int fromIndex)
 	{
 		read.lock();
 		int r = bitSet.previousClearBit(fromIndex);
@@ -99,7 +103,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 		return r;
 	}
 	
-	public int cardinality()
+	public  int cardinality()
 	{
 		read.lock();
 		int r = bitSet.cardinality();
@@ -108,7 +112,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public void and(AtomicBitSet set)
+	public  void and(AtomicBitSet set)
 	{
 		write.lock();
 		bitSet.and(set.bitSet);
@@ -116,7 +120,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public void or(AtomicBitSet set)
+	public  void or(AtomicBitSet set)
 	{
 		write.lock();
 		bitSet.or(set.bitSet);
@@ -124,7 +128,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public void xor(AtomicBitSet set)
+	public  void xor(AtomicBitSet set)
 	{
 		write.lock();
 		bitSet.xor(set.bitSet);
@@ -132,7 +136,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 	
-	public void andNot(AtomicBitSet set)
+	public  void andNot(AtomicBitSet set)
 	{
 		write.lock();
 		bitSet.andNot(set.bitSet);
@@ -140,7 +144,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 	}
 
 		
-	public int size()
+	public  int size()
 	{
 		read.lock();
 		int r = bitSet.size();
@@ -148,7 +152,7 @@ public class AtomicBitSet implements Serializable, Cloneable
 		return r;
 	}
 	
-	public Object clone()
+	public  Object clone()
 	{
 		read.lock();
 		AtomicBitSet r = new AtomicBitSet(this.bitSet);
